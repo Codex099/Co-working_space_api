@@ -1,0 +1,8 @@
+fastapi
+pydantic
+uvicorn[standard]
+sqlalchemy
+jinja2
+python-multipart
+psycopg[binary]  ##postgresql driver for python
+passlib[bcrypt]
