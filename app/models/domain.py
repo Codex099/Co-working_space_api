@@ -1,51 +1,74 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, Time, DateTime, LargeBinary
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, Time, DateTime, LargeBinary, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from db.database import Base, db, db_session
+import uuid
 
+# ============================================================
+#  USER — supporte Firebase ET auth locale
+#  - firebase_uid  : rempli si le user vient de Firebase (Google, GitHub...)
+#  - hashed_password : rempli si le user s'inscrit en local (email+mdp)
+#  - auth_provider : "local" | "google.com" | "github.com" | ...
+#  - is_verified   : False par défaut pour local (attend confirmation email)
+#                    True directement pour Firebase (déjà vérifié)
+# ============================================================
 class User(Base):
     __tablename__ = 'users'
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
-    email = Column(String(120), unique=True, nullable=False)
-    number = Column(Integer, unique=True, nullable=False)
-    password = Column(String(100), nullable=False)
-    role = Column(String(20), default='Normal user')
-    balance = Column(Float, default=0.0)
-    bookings = relationship('Booking', backref='user') 
-    recharges = relationship('Recharge', backref='user')
+
+    # Clé primaire UUID propre (indépendant de Firebase)
+    id               = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    email            = Column(String(120), unique=True, nullable=False)
+    username         = Column(String(100), nullable=False)
+    phone            = Column(String(20), nullable=True)   # nullable car Firebase ne donne pas le phone
+    role             = Column(String(20), default='user')
+    balance          = Column(Float, default=0.0)
+
+    # --- Champs auth hybride ---
+    auth_provider    = Column(String(50), nullable=False, default='local')  # "local" | "google.com" | ...
+    firebase_uid     = Column(String(128), unique=True, nullable=True)      # NULL si auth locale
+    hashed_password  = Column(String(256), nullable=True)                   # NULL si Firebase
+    is_verified      = Column(Boolean, default=False)                       # email vérifié ?
+    created_at       = Column(DateTime, default=datetime.utcnow)
+
+    bookings         = relationship('Booking', backref='user')
+    recharges        = relationship('Recharge', backref='user')
+
 
 class Location(Base):
     __tablename__ = 'locations'
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
-    image_data = Column(LargeBinary, nullable=True) #largebinary -----> pour image
-    rooms = relationship('Room', backref='location')
+    id         = Column(Integer, primary_key=True)
+    name       = Column(String(100), nullable=False)
+    image_data = Column(LargeBinary, nullable=True)
+    rooms      = relationship('Room', backref='location')
+
 
 class Room(Base):
     __tablename__ = 'rooms'
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
-    capacity = Column(Integer, nullable=False)
-    slot_price = Column(Float, nullable=False)  
-    slot_duration = Column(Integer, nullable=False, default=60)  #ppar défault 1h
-    location_id = Column(Integer, ForeignKey('locations.id'), nullable=False)
-    bookings = relationship('Booking', backref='room')
-    image_data = Column(LargeBinary)  
+    id            = Column(Integer, primary_key=True)
+    name          = Column(String(100), nullable=False)
+    capacity      = Column(Integer, nullable=False)
+    slot_price    = Column(Float, nullable=False)
+    slot_duration = Column(Integer, nullable=False, default=60)  # en minutes, défaut 1h
+    location_id   = Column(Integer, ForeignKey('locations.id'), nullable=False)
+    bookings      = relationship('Booking', backref='room')
+    image_data    = Column(LargeBinary)
+
 
 class Booking(Base):
     __tablename__ = 'bookings'
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    room_id = Column(Integer, ForeignKey('rooms.id'), nullable=False)
-    date = Column(Date, nullable=False)  
-    start_time = Column(Time, nullable=False)
-    slot_count = Column(Integer, nullable=False)    # nombre de slot réservé
-    total_price = Column(Float, nullable=True) 
+    id          = Column(Integer, primary_key=True)
+    user_id     = Column(String(36), ForeignKey('users.id'), nullable=False)  # FK vers users.id (UUID)
+    room_id     = Column(Integer, ForeignKey('rooms.id'), nullable=False)
+    date        = Column(Date, nullable=False)
+    start_time  = Column(Time, nullable=False)
+    slot_count  = Column(Integer, nullable=False)
+    total_price = Column(Float, nullable=True)
 
-class Recharge(Base):   #ychof + ymodifier
+
+class Recharge(Base):
     __tablename__ = 'recharges'
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    amount = Column(Float, nullable=False)
-    date = Column(DateTime, default=datetime.utcnow)
+    id      = Column(Integer, primary_key=True)
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)  # FK vers users.id (UUID)
+    amount  = Column(Float, nullable=False)
+    date    = Column(DateTime, default=datetime.utcnow)

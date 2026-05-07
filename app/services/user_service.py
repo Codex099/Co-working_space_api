@@ -1,164 +1,283 @@
 from models.domain import User
 from db.database import db
-import bcrypt
-import random
+from core.hashing import hash_password, verify_password
+from core.jwt import create_access_token
+from services.email_service import (
+    generate_code, send_verification_email,
+    verification_codes, pending_local_users
+)
+import uuid
 
-# For storing temporarily
-signup_codes = {}
-pending_users = {}
+# ============================================================
+#  USER SERVICE — Logique métier auth hybride
+#  ┌─────────────────────────────────────────────────────┐
+#  │  LOCAL SIGNUP FLOW :                                │
+#  │  1. local_signup_request() → génère code + envoie  │
+#  │  2. confirm_local_signup() → vérifie code + crée   │
+#  │  3. local_login()          → vérifie mdp → JWT     │
+#  ├─────────────────────────────────────────────────────┤
+#  │  FIREBASE FLOW :                                    │
+#  │  1. firebase_auth_or_create() → vérifie token      │
+#  │                               → crée si nouveau    │
+#  │                               → retourne JWT local │
+#  └─────────────────────────────────────────────────────┘
+# ============================================================
 
-# Hash the plain password before saving to the database.
-# bcrypt.hashpw() generates a salted hash suitable for secure storage.
-def hash_password(plain_password):
-    # Generate salt and hash password
-    salt = bcrypt.gensalt()
-    return bcrypt.hashpw(str(plain_password).encode('utf-8'), salt).decode('utf-8')
 
-# Verify a login password against the stored hashed password.
-def verify_password(plain_password, hashed_password):
-    return bcrypt.checkpw(str(plain_password).encode('utf-8'), hashed_password.encode('utf-8'))
+# ─── Helpers DB ──────────────────────────────────────────────
 
-
-def get_user_by_email(email):
+def get_user_by_email(email: str):
     return User.query.filter_by(email=email).first()
 
-def get_user_by_number(number):
-    return User.query.filter_by(number=number).first()
+def get_user_by_phone(phone: str):
+    return User.query.filter_by(phone=phone).first()
 
-def get_user_by_id(user_id):
-    return User.query.get(user_id)
+def get_user_by_uid(uid: str):
+    """Cherche par id (UUID interne)."""
+    return User.query.get(uid)
 
-def get_user_balance(user_id):
-    user = get_user_by_id(user_id)
-    if not user:
-        return 0.0
-    return user.balance
+def get_user_by_firebase_uid(firebase_uid: str):
+    return User.query.filter_by(firebase_uid=firebase_uid).first()
 
-def create_user_db(data):
-    # Hash the password once, then store the hash instead of plain text.
-    hashed_password = hash_password(data['password'])
+def get_user_balance(uid: str):
+    user = get_user_by_uid(uid)
+    return user.balance if user else 0.0
 
-    user = User(
-        name=data['name'],
-        email=data['email'],
-        number=data['number'],
-        password=hashed_password,
-        role=data.get('role', 'Normal user'),
-        balance=data.get('balance', 0.0)
-    )
-    db.session.add(user)
-    db.session.commit()
-    return user
+def get_all_users():
+    return User.query.all()
 
 def save_user(user):
     db.session.commit()
 
-def delete_user(user_id):
-    user = User.query.get(user_id)
+def delete_user(uid: str):
+    user = get_user_by_uid(uid)
     if not user:
         return False
     db.session.delete(user)
     db.session.commit()
     return True
 
-def get_all_users():
-    return User.query.all()
 
-def create_user(data):
-    if not data or not all(k in data for k in ("name", "email", "password", "number",)):
-        return {"error": "Missing data"}, 400
-    if not data['email'] or not data['number']:
-        return {"error": "Email or number cannot be null"}, 400
-    if get_user_by_email(data['email']):
-        return {"error": "Email already exists"}, 400
-    if get_user_by_number(data['number']):
-        return {"error": "Number already exists"}, 400
+# ─── Auth locale ─────────────────────────────────────────────
+
+def local_signup_request(data: dict):
+    """
+    Étape 1 du signup local.
+    Valide les données, génère un code et envoie l'email de vérification.
+    """
+    email = data["email"].lower().strip()
+
+    # Vérifier si l'email est déjà utilisé
+    if get_user_by_email(email):
+        return {"error": "Email déjà utilisé"}, 400
+
+    # Générer et stocker le code temporaire
+    code = generate_code()
+    verification_codes[email] = code
+    pending_local_users[email] = {
+        "username": data["username"],
+        "email":    email,
+        "phone":    data["phone"],
+        "password": data["password"],   # sera hashé à la confirmation
+    }
+
+    # Envoyer le code par email
+    sent = send_verification_email(email, code, username=data["username"])
+    if not sent:
+        return {"error": "Erreur lors de l'envoi de l'email"}, 500
+
+    return {"message": "Code de vérification envoyé", "email": email}, 200
+
+
+def confirm_local_signup(email: str, code: str):
+    """
+    Étape 2 du signup local.
+    Vérifie le code et crée le user en DB.
+    """
+    email = email.lower().strip()
+    expected = verification_codes.get(email)
+
+    if not expected:
+        return {"error": "Aucun code trouvé pour cet email"}, 400
+    if code != expected:
+        return {"error": "Code invalide"}, 401
+
+    pending = pending_local_users.get(email)
+    if not pending:
+        return {"error": "Données utilisateur introuvables"}, 400
+
+    # Créer le user avec mot de passe hashé
+    user = User(
+        id              = str(uuid.uuid4()),
+        email           = pending["email"],
+        username        = pending["username"],
+        phone           = pending["phone"],
+        hashed_password = hash_password(pending["password"]),   # hash bcrypt
+        auth_provider   = "local",
+        firebase_uid    = None,                                  # local → pas de firebase_uid
+        is_verified     = True,                                  # code confirmé = email vérifié
+    )
+    db.session.add(user)
+    db.session.commit()
+
+    # Nettoyer les données temporaires
+    del verification_codes[email]
+    del pending_local_users[email]
+
+    # Générer le JWT
+    token = create_access_token({"sub": user.id, "email": user.email})
+    return {"message": "Compte créé avec succès", "access_token": token, "user_id": user.id}, 201
+
+
+def local_login(email: str, password: str):
+    """
+    Connexion avec email + mot de passe.
+    Retourne un JWT local si les credentials sont corrects.
+    """
+    email = email.lower().strip()
+    user = get_user_by_email(email)
+
+    if not user:
+        return {"error": "Email ou mot de passe incorrect"}, 401
+
+    if user.auth_provider != "local":
+        return {"error": f"Ce compte utilise {user.auth_provider}. Connectez-vous via Google."}, 400
+
+    if not user.hashed_password or not verify_password(password, user.hashed_password):
+        return {"error": "Email ou mot de passe incorrect"}, 401
+
+    if not user.is_verified:
+        return {"error": "Veuillez vérifier votre email avant de vous connecter"}, 403
+
+    token = create_access_token({"sub": user.id, "email": user.email})
+    return {
+        "access_token": token,
+        "token_type":   "bearer",
+        "user": {
+            "id":       user.id,
+            "email":    user.email,
+            "username": user.username,
+            "role":     user.role,
+            "balance":  user.balance,
+        }
+    }, 200
+
+
+# ─── Auth Firebase ────────────────────────────────────────────
+
+def firebase_auth_or_create(firebase_token: str, phone: str = None):
+    """
+    Vérifie le token Firebase et crée/récupère le user en DB.
+    Retourne un JWT local unifié (même flow que auth locale).
+    """
+    try:
+        from firebase_admin import auth as firebase_auth
+        decoded = firebase_auth.verify_id_token(firebase_token)
+    except Exception:
+        return {"error": "Token Firebase invalide"}, 401
+
+    firebase_uid = decoded["uid"]
+    email        = decoded.get("email", "")
+    username     = decoded.get("name", email.split("@")[0])
+    provider     = decoded.get("firebase", {}).get("sign_in_provider", "firebase")
+
+    # Chercher le user par firebase_uid ou email
+    user = get_user_by_firebase_uid(firebase_uid) or get_user_by_email(email)
+
+    if not user:
+        # Nouveau user Firebase → créer en DB
+        user = User(
+            id            = str(uuid.uuid4()),
+            email         = email,
+            username      = username,
+            phone         = phone,
+            auth_provider = provider,
+            firebase_uid  = firebase_uid,
+            hashed_password = None,      # Firebase → pas de mdp local
+            is_verified   = True,        # Firebase a déjà vérifié l'email
+        )
+        db.session.add(user)
+        db.session.commit()
+    else:
+        # User existant → mettre à jour le firebase_uid si manquant
+        if not user.firebase_uid:
+            user.firebase_uid = firebase_uid
+            db.session.commit()
+
+    # Générer notre propre JWT (même format que auth locale)
+    token = create_access_token({"sub": user.id, "email": user.email})
+    return {
+        "access_token": token,
+        "token_type":   "bearer",
+        "user": {
+            "id":       user.id,
+            "email":    user.email,
+            "username": user.username,
+            "role":     user.role,
+            "balance":  user.balance,
+        }
+    }, 200
+
+
+# ─── Fonctions utilitaires (conservées) ──────────────────────
+
+def create_user_db(data: dict):
+    """Création directe en DB (utilisé par l'admin)."""
+    user = User(
+        id              = str(uuid.uuid4()),
+        firebase_uid    = data.get("firebase_uid"),
+        username        = data["username"],
+        email           = data["email"],
+        phone           = data.get("phone"),
+        role            = data.get("role", "user"),
+        balance         = data.get("balance", 0.0),
+        auth_provider   = "firebase" if data.get("firebase_uid") else "local",
+        is_verified     = True,
+    )
+    db.session.add(user)
+    db.session.commit()
+    return user
+
+def create_user(data: dict):
+    if not data or not all(k in data for k in ("username", "email")):
+        return {"error": "Données manquantes"}, 400
+    if get_user_by_email(data["email"]):
+        return {"error": "Email déjà utilisé"}, 400
     user = create_user_db(data)
-    return {"message": "User created", "user_id": user.id}, 201
+    return {"message": "Utilisateur créé", "user_id": user.id}, 201
 
-def get_user_by_email_logic(email):
+def get_user_by_email_logic(email: str):
     user = get_user_by_email(email)
     if not user:
-        return {"error": "User not found"}, 404
-    balance = get_user_balance(user.id)
-    return {
-        "id": user.id,
-        "name": user.name,
-        "email": user.email,
-        "role": user.role,
-        "balance": balance,
-        "number": user.number
-    }, 200
+        return {"error": "Utilisateur introuvable"}, 404
+    return _user_to_dict(user), 200
 
-def login_user(data):
-    if not data or not all(k in data for k in ("email", "password")):
-        return {"error": "Missing data"}, 400
-
-    user = get_user_by_email(data['email'])
-    # Verify the clear text password against the bcrypt hash stored in DB.
-    if not user or not verify_password(data['password'], user.password):
-        return {"error": "Invalid credentials"}, 401
-
-    return {
-        "id": user.id,
-        "name": user.name,
-        "email": user.email,
-        "role": user.role,
-        "balance": user.balance
-    }, 200
-
-def signup_request(data):
-    if not data or not all(k in data for k in ("name", "email", "password", "number")):
-        return {"error": "Missing data"}, 400
-    if not data['email'] or not data['number']:
-        return {"error": "Email or number cannot be null"}, 400
-    if get_user_by_email(data['email']):
-        return {"error": "Email already exists"}, 400
-
-    # Store the sign-up request temporarily until confirmation.
-    # The password is not stored in the DB until the code is confirmed.
-    code = str(random.randint(10000, 99999))
-    signup_codes[data['email']] = code
-    pending_users[data['email']] = data
-
-    print(f"Code de confirmation pour {data['email']} : {code}")
-
-    return {"message": "Confirmation code sent (see terminal)", "email": data['email']}, 200
-
-def confirm_signup(email, code):
-    expected_code = signup_codes.get(email)
-    if not expected_code:
-        return {"error": "No code found for this email"}, 400
-    if code != expected_code:
-        return {"error": "Invalid code"}, 401
-
-    user = create_user_db(pending_users[email])
-
-    del signup_codes[email]
-    del pending_users[email]
-
-    return {"message": "User created", "user_id": user.id}, 201
-
-def get_user_by_id_logic(user_id):
-    user = get_user_by_id(user_id)
+def get_user_by_uid_logic(uid: str):
+    user = get_user_by_uid(uid)
     if not user:
-        return {"error": "User not found"}, 404
-    balance = get_user_balance(user.id)
-    return {
-        "id": user.id,
-        "name": user.name,
-        "email": user.email,
-        "role": user.role,
-        "balance": balance,
-        "number": user.number
-    }, 200
+        return {"error": "Utilisateur introuvable"}, 404
+    return _user_to_dict(user), 200
 
-def update_user_by_id(user_id, data):
-    user = get_user_by_id(user_id)
+def update_user_by_uid(uid: str, data: dict):
+    user = get_user_by_uid(uid)
     if not user:
-        return {"error": "User not found"}, 404
-    user.name = data.get('name', user.name)
-    user.email = data.get('email', user.email)
-    user.number = data.get('number', user.number)
+        return {"error": "Utilisateur introuvable"}, 404
+    if "username" in data: user.username = data["username"]
+    if "email"    in data: user.email    = data["email"]
+    if "phone"    in data: user.phone    = data["phone"]
     save_user(user)
-    return {"message": "User updated"}, 200
+    return {"message": "Profil mis à jour"}, 200
+
+def _user_to_dict(user) -> dict:
+    return {
+        "id":           user.id,
+        "firebase_uid": user.firebase_uid,
+        "username":     user.username,
+        "email":        user.email,
+        "phone":        user.phone,
+        "role":         user.role,
+        "balance":      user.balance,
+        "auth_provider":user.auth_provider,
+        "is_verified":  user.is_verified,
+    }
+

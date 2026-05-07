@@ -10,7 +10,7 @@ async def create_booking_route(data: BookingCreate):
     resp, code = create_booking(data.model_dump())
     return JSONResponse(content=resp, status_code=code)
 
-@router.get('/reservations/user/{user_id}')
-def get_user_reservations_route(user_id: int):
-    resp, code = get_user_reservations(user_id)
+@router.get('/reservations/user/{user_uid}')
+def get_user_reservations_route(user_uid: str):
+    resp, code = get_user_reservations(user_uid)
     return JSONResponse(content=resp, status_code=code)

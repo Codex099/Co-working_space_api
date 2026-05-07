@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()  # ← doit être en premier, avant tout autre import
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text

@@ -6,7 +6,7 @@ import base64
 import os
 
 from services.user_service import (
-    get_all_users, get_user_by_email, get_user_by_id, 
+    get_all_users, get_user_by_email, get_user_by_uid as get_user_by_id, 
     create_user_db as create_user, delete_user, get_user_balance
 )
 from services.location_service import (
@@ -38,7 +38,8 @@ def admin_home(request: Request):
 @admin_bp.get('/users', response_class=HTMLResponse)
 def users_page(request: Request, search_email: Optional[str] = None):
     if search_email:
-        users = [get_user_by_email(search_email)] if get_user_by_email(search_email) else []
+        user = get_user_by_email(search_email)
+        users = [user] if user else []
     else:
         users = get_all_users()
     return templates.TemplateResponse(request, 'users.html', {"request": request, "users": users})
@@ -54,26 +55,26 @@ def rooms_page(request: Request):
     locations = get_all_locations()
     return templates.TemplateResponse(request, 'rooms.html', {"request": request, "rooms": rooms, "locations": locations})
 
-@admin_bp.post('/users/f_balance/{user_id}')
-async def update_balance(request: Request, user_id: int, balance: float = Form(...)):
-    create_recharge({'user_id': user_id, 'amount': balance})
+@admin_bp.post('/users/f_balance/{user_uid}')
+async def update_balance(request: Request, user_uid: str, balance: float = Form(...)):
+    create_recharge({'user_id': user_uid, 'amount': balance})
     return RedirectResponse(url=request.url_for('users_page'), status_code=303)
 
 @admin_bp.post('/users/create')
 async def create_user_admin(
     request: Request,
-    name: str = Form(...),
+    user_uid: str = Form(None),
+    username: str = Form(...),
     email: str = Form(...),
-    number: int = Form(...),
-    password: str = Form(...),
-    role: str = Form('Normal user'),
+    phone: str = Form(...),
+    role: str = Form('user'),
     balance: float = Form(0.0)
 ):
     data = {
-        'name': name,
+        'firebase_uid': firebase_uid,
+        'username': username,
         'email': email,
-        'number': number,
-        'password': password,
+        'phone': phone,
         'role': role,
         'balance': balance,
     }
@@ -116,9 +117,9 @@ def delete_room_admin(request: Request, room_id: int):
     delete_room(room_id)
     return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
 
-@admin_bp.post('/users/delete/{user_id}')
-def delete_user_admin(request: Request, user_id: int):
-    delete_user(user_id)
+@admin_bp.post('/users/delete/{user_uid}')
+def delete_user_admin(request: Request, user_uid: str):
+    delete_user(user_uid)
     return RedirectResponse(url=request.url_for('users_page'), status_code=303)
 
 @admin_bp.post('/locations/delete/{location_id}')
@@ -126,13 +127,13 @@ def delete_location_admin(request: Request, location_id: int):
     delete_location(location_id)
     return RedirectResponse(url=request.url_for('locations_page'), status_code=303)
 
-@admin_bp.get('/users/{user_id}', response_class=HTMLResponse)
-def user_detail(request: Request, user_id: int):
-    user = get_user_by_id(user_id)
+@admin_bp.get('/users/{user_uid}', response_class=HTMLResponse)
+def user_detail(request: Request, user_uid: str):
+    user = get_user_by_id(user_uid)
     if not user:
         return HTMLResponse("User not found", status_code=404)
-    balance = get_user_balance(user_id)
-    recharges = get_user_recharges(user_id)
+    balance = get_user_balance(user_uid)
+    recharges = get_user_recharges(user_uid)
     return templates.TemplateResponse(request, 'user_detail.html', {"request": request, "user": user, "balance": balance, "recharges": recharges})
 
 @admin_bp.get('/locations/{location_id}/rooms', response_class=HTMLResponse)

@@ -29,9 +29,9 @@ def create_booking_db(data):
     return booking
 
 def create_booking(data):
-    from services.user_service import get_user_by_id, save_user
+    from services.user_service import get_user_by_uid, save_user
     from services.location_service import get_all_rooms
-    user = get_user_by_id(data['user_id'])
+    user = get_user_by_uid(data['user_id'])
     room = next((r for r in get_all_rooms() if r.id == data['room_id']), None)
     if not user or not room:
         return {"error": "User or room not found"}, 404
@@ -98,9 +98,9 @@ def get_available_slots_range(room_id, start_date_str, end_date_str):
 
     return result, 200
 
-def get_user_reservations(user_id):
+def get_user_reservations(user_uid):
     from services.location_service import get_all_rooms, get_all_locations
-    bookings = [b for b in get_all_bookings() if b.user_id == user_id]
+    bookings = [b for b in get_all_bookings() if b.user_id == user_uid]
     result = []
     for b in bookings:
         rooms = get_all_rooms()
