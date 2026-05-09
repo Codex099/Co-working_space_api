@@ -13,7 +13,7 @@ from services.location_service import (
     get_all_locations, get_all_rooms, create_location, 
     create_room, delete_room, delete_location
 )
-from services.recharge_service import get_user_recharges, create_recharge_db as create_recharge
+from services.recharge_service import get_user_recharges, create_recharge_db as create_recharge, get_all_recharges
 from services.booking_service import get_all_bookings
 
 admin_bp = APIRouter(prefix='/admin')
@@ -63,20 +63,23 @@ async def update_balance(request: Request, user_uid: str, balance: float = Form(
 @admin_bp.post('/users/create')
 async def create_user_admin(
     request: Request,
-    user_uid: str = Form(None),
     username: str = Form(...),
     email: str = Form(...),
     phone: str = Form(...),
+    password: Optional[str] = Form(None),
     role: str = Form('user'),
     balance: float = Form(0.0)
 ):
+    from core.hashing import hash_password
     data = {
-        'firebase_uid': firebase_uid,
         'username': username,
         'email': email,
         'phone': phone,
         'role': role,
         'balance': balance,
+        'hashed_password': hash_password(password) if password else None,
+        'auth_provider': 'local',
+        'is_verified': True
     }
     create_user(data)
     return RedirectResponse(url=request.url_for('users_page'), status_code=303)
@@ -151,3 +154,10 @@ def bookings_page(request: Request, search_email: Optional[str] = None):
     if search_email:
         bookings = [b for b in bookings if b.user and b.user.email and search_email in b.user.email.lower()]
     return templates.TemplateResponse(request, 'bookings.html', {"request": request, "bookings": bookings})
+
+@admin_bp.get('/recharges', response_class=HTMLResponse)
+def recharges_page(request: Request):
+    recharges = get_all_recharges()
+    # Trier par date décroissante pour voir les plus récentes en premier
+    recharges = sorted(recharges, key=lambda r: r.date, reverse=True)
+    return templates.TemplateResponse(request, 'recharges.html', {"request": request, "recharges": recharges})

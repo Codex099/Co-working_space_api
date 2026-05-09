@@ -231,8 +231,9 @@ def create_user_db(data: dict):
         phone           = data.get("phone"),
         role            = data.get("role", "user"),
         balance         = data.get("balance", 0.0),
-        auth_provider   = "firebase" if data.get("firebase_uid") else "local",
-        is_verified     = True,
+        auth_provider   = data.get("auth_provider", "firebase" if data.get("firebase_uid") else "local"),
+        hashed_password = data.get("hashed_password"),
+        is_verified     = data.get("is_verified", True),
     )
     db.session.add(user)
     db.session.commit()
