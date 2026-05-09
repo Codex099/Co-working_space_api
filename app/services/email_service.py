@@ -138,7 +138,14 @@ def send_verification_email(to_email: str, code: str, username: str = "utilisate
 </html>"""
         msg.attach(MIMEText(html, "html"))
 
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        import socket
+        try:
+            # Force la résolution en IPv4 pour éviter l'erreur "Network is unreachable" sur Render (lié à l'IPv6)
+            host_ipv4 = socket.gethostbyname(SMTP_HOST)
+        except Exception:
+            host_ipv4 = SMTP_HOST
+
+        with smtplib.SMTP(host_ipv4, SMTP_PORT) as server:
             server.starttls()
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.sendmail(SMTP_USER, to_email, msg.as_string())
@@ -146,4 +153,10 @@ def send_verification_email(to_email: str, code: str, username: str = "utilisate
 
     except Exception as e:
         print(f"[EMAIL ERROR] {e}")
+        # FALLBACK : En cas d'erreur SMTP sur le serveur (ex: Render bloque le port), on affiche le code dans les logs
+        print(f"\n{'='*50}")
+        print(f"[FALLBACK MODE] Code de vérification pour {to_email}: {code}")
+        print(f"{'='*50}\n")
+        # On retourne False pour indiquer l'erreur, mais le code est au moins dans les logs
+        # Si vous voulez que l'inscription ne bloque pas du tout, changez en 'return True'
         return False
