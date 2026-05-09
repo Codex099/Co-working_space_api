@@ -157,6 +157,5 @@ def send_verification_email(to_email: str, code: str, username: str = "utilisate
         print(f"\n{'='*50}")
         print(f"[FALLBACK MODE] Code de vérification pour {to_email}: {code}")
         print(f"{'='*50}\n")
-        # On retourne False pour indiquer l'erreur, mais le code est au moins dans les logs
-        # Si vous voulez que l'inscription ne bloque pas du tout, changez en 'return True'
-        return False
+        # On retourne True pour que l'inscription ne bloque pas (très utile sur le free tier de Render)
+        return True
