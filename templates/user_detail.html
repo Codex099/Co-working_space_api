@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -7,14 +7,14 @@
 </head>
 <body>
 <div class="container mt-5">
-    <h2>User: {{ user.name }} ({{ user.email }})</h2>
-    <p><strong>NumÃ©ro:</strong> {{ user.number }}</p>
-    <p><strong>RÃ´le:</strong> {{ user.role }}</p>
+    <h2>User: {{ user.username }} ({{ user.email }})</h2>
+    <p><strong>Numéro:</strong> {{ user.phone }}</p>
+    <p><strong>Rôle:</strong> {{ user.role }}</p>
     <p><strong>Solde actuel:</strong> {{ balance }} DZD</p>
 
     <h4>Ajouter une recharge</h4>
-    <form method="post" action="{{ url_for('update_balance', user_id=user.id) }}" class="form-inline mb-3">
-        <input type="number" step="0.01" name="balance" class="form-control mr-2" placeholder="Montant Ã  ajouter (+/-)">
+    <form method="post" action="{{ url_for('update_balance', user_uid=user.id) }}" class="form-inline mb-3">
+        <input type="number" step="0.01" name="balance" class="form-control mr-2" placeholder="Montant à ajouter (+/-)">
         <button type="submit" class="btn btn-success">Ajouter</button>
     </form>
 

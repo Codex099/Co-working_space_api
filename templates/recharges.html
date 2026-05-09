@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Recharge History</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+<div class="container mt-5">
+    <h1>Global Recharge History</h1>
+    
+    <table class="table table-bordered table-striped mt-4">
+        <thead class="thead-dark">
+            <tr>
+                <th>ID</th>
+                <th>User (Email)</th>
+                <th>Username</th>
+                <th>Amount</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for recharge in recharges %}
+            <tr>
+                <td>{{ recharge.id }}</td>
+                <td>
+                    {% if recharge.user %}
+                        {{ recharge.user.email }}
+                    {% else %}
+                        <span class="text-muted">Unknown User ({{ recharge.user_id }})</span>
+                    {% endif %}
+                </td>
+                <td>{{ recharge.user.username if recharge.user else 'N/A' }}</td>
+                <td class="font-weight-bold text-success">{{ recharge.amount }} DZD</td>
+                <td>{{ recharge.date.strftime('%Y-%m-%d %H:%M') }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" class="text-center">No recharges found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="{{ url_for('admin_home') }}" class="btn btn-secondary mt-3">Back to Admin Home</a>
+</div>
+</body>
+</html>
