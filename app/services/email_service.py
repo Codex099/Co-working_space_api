@@ -1,20 +1,14 @@
-import smtplib
 import os
 import random
 import string
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import requests
 
 # ============================================================
-#  EMAIL CONFIG (variables d'environnement)
-#  → Utilise Gmail SMTP par défaut
-#  → Configure SMTP_USER et SMTP_PASSWORD dans ton .env
-#  → Pour Gmail : activer "App Password" dans les paramètres Google
+#  EMAIL CONFIG (BREVO API)
 # ============================================================
-SMTP_HOST     = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT     = int(os.getenv("SMTP_PORT", 587))
-SMTP_USER     = os.getenv("SMTP_USER", "")       # ton email Gmail
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")   # app password Gmail
+BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
+# L'email que vous avez validé sur Brevo comme expéditeur
+SENDER_EMAIL  = os.getenv("SMTP_USER", "votre-email@gmail.com")
 FRONTEND_URL  = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 # Stockage temporaire des codes (en production → Redis ou DB)
@@ -29,26 +23,18 @@ def generate_code(length: int = 6) -> str:
 
 def send_verification_email(to_email: str, code: str, username: str = "utilisateur") -> bool:
     """
-    Envoie un email de vérification avec le code.
-    Retourne True si succès, False sinon.
-    En mode développement (pas de SMTP configuré) → affiche le code en console.
+    Envoie un email de vérification via l'API Brevo.
+    Retourne True si succès ou Fallback, False sinon.
     """
-    # Mode DEV : pas de SMTP configuré → affiche dans le terminal
-    if not SMTP_USER or not SMTP_PASSWORD:
+    # Mode DEV : pas de clé API → affiche dans le terminal
+    if not BREVO_API_KEY:
         print(f"\n{'='*50}")
         print(f"[DEV MODE] Code de vérification pour {to_email}: {code}")
         print(f"{'='*50}\n")
         return True
 
     try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = "Vérification de votre compte Co Working Space"
-        msg["From"]    = SMTP_USER
-        msg["To"]      = to_email
-
-
-
-        html = f"""
+        html_content = f"""
         <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -136,26 +122,31 @@ def send_verification_email(to_email: str, code: str, username: str = "utilisate
 
 </body>
 </html>"""
-        msg.attach(MIMEText(html, "html"))
 
-        import socket
-        try:
-            # Force la résolution en IPv4 pour éviter l'erreur "Network is unreachable" sur Render (lié à l'IPv6)
-            host_ipv4 = socket.gethostbyname(SMTP_HOST)
-        except Exception:
-            host_ipv4 = SMTP_HOST
+        url = "https://api.brevo.com/v3/smtp/email"
+        headers = {
+            "accept": "application/json",
+            "content-type": "application/json",
+            "api-key": BREVO_API_KEY
+        }
+        payload = {
+            "sender": {"name": "CoWorking Space", "email": SENDER_EMAIL},
+            "to": [{"email": to_email, "name": username}],
+            "subject": "Vérification de votre compte Co Working Space",
+            "htmlContent": html_content
+        }
 
-        with smtplib.SMTP(host_ipv4, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_USER, to_email, msg.as_string())
-        return True
+        response = requests.post(url, json=payload, headers=headers)
+        
+        if response.status_code in [200, 201, 202]:
+            return True
+        else:
+            print(f"[BREVO ERROR] {response.status_code} - {response.text}")
+            # Fallback logs pour ne pas bloquer l'utilisateur si l'API échoue
+            print(f"\n[FALLBACK] Code pour {to_email}: {code}\n")
+            return True
 
     except Exception as e:
         print(f"[EMAIL ERROR] {e}")
-        # FALLBACK : En cas d'erreur SMTP sur le serveur (ex: Render bloque le port), on affiche le code dans les logs
-        print(f"\n{'='*50}")
-        print(f"[FALLBACK MODE] Code de vérification pour {to_email}: {code}")
-        print(f"{'='*50}\n")
-        # On retourne True pour que l'inscription ne bloque pas (très utile sur le free tier de Render)
+        print(f"\n[FALLBACK] Code pour {to_email}: {code}\n")
         return True
