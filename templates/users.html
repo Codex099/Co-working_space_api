@@ -1,71 +1,215 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>User Management</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion des Utilisateurs | Admin</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --bg-body: #f8fafc;
+            --sidebar-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-body);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            padding: 30px 20px;
+            flex-shrink: 0;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1100;
+        }
+        .sidebar-brand { display: flex; align-items: center; padding: 0 10px 30px; font-weight: 700; font-size: 20px; color: var(--primary); }
+        .sidebar-brand i { margin-right: 12px; font-size: 24px; }
+        .nav-menu { list-style: none; padding: 0; margin: 0; flex-grow: 1; }
+        .nav-item { margin-bottom: 8px; }
+        .nav-link { display: flex; align-items: center; padding: 12px 15px; border-radius: 12px; color: var(--text-muted); text-decoration: none !important; font-weight: 600; transition: all 0.2s; }
+        .nav-link i { margin-right: 12px; width: 20px; text-align: center; }
+        .nav-link:hover { background: #f1f5f9; color: var(--primary); }
+        .nav-link.active { background: var(--primary); color: white; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); }
+        .sidebar-footer { border-top: 1px solid #e2e8f0; padding-top: 20px; }
+
+        /* MAIN CONTENT */
+        .main-content { flex-grow: 1; padding: 40px; overflow-y: auto; transition: all 0.3s ease; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+
+        .mobile-nav-btn { display: none; width: 45px; height: 45px; background: white; border-radius: 12px; align-items: center; justify-content: center; border: 1px solid #e2e8f0; cursor: pointer; margin-right: 15px; color: var(--text-main); }
+
+        .user-profile-top { display: flex; align-items: center; background: white; padding: 8px 16px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+        .role-badge-top { padding: 4px 10px; border-radius: 99px; background: #e0e7ff; color: #4338ca; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-left: 10px; }
+
+        .premium-card { background: white; border-radius: 24px; padding: 30px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); margin-bottom: 30px; }
+
+        /* Form Styling */
+        .form-control { border-radius: 12px; padding: 10px 15px; border: 1px solid #e2e8f0; font-size: 14px; }
+        .btn-premium { border-radius: 12px; padding: 10px 20px; font-weight: 600; transition: all 0.2s; display: inline-flex; align-items: center; border: none; }
+        .btn-add { background: var(--success); color: white; }
+        .btn-search { background: var(--primary); color: white; }
+
+        .search-wrapper { display: flex; align-items: center; background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 5px 15px; transition: all 0.3s; flex-grow: 1; }
+
+        /* Table Styling */
+        .table-responsive { border-radius: 20px; overflow: hidden; background: white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+        .table thead th { background: #f8fafc; color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 11px; padding: 15px 20px; border-bottom: 1px solid #e2e8f0; }
+        .table tbody td { padding: 15px 20px; vertical-align: middle; border-top: 1px solid #f1f5f9; font-size: 13px; }
+
+        .role-badge { padding: 4px 10px; border-radius: 99px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+        .badge-admin { background: #fee2e2; color: #991b1b; }
+        .badge-manager { background: #e0e7ff; color: #4338ca; }
+        .badge-user { background: #f1f5f9; color: #475569; }
+
+        .action-btn { width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; margin-right: 5px; border: none; transition: all 0.2s; }
+        .btn-view { background: #e0f2fe; color: #0369a1; }
+        .btn-delete { background: #fee2e2; color: #991b1b; }
+
+        .password-wrapper { position: relative; }
+        .toggle-password { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; color: var(--text-muted); }
+
+        /* RESPONSIVE */
+        @media (max-width: 992px) {
+            .sidebar { position: fixed; top: 0; left: 0; height: 100vh; transform: translateX(-100%); }
+            .sidebar.active { transform: translateX(0); box-shadow: 20px 0 30px rgba(0,0,0,0.1); }
+            .mobile-nav-btn { display: flex; }
+            .main-content { padding: 20px; }
+            .header-bar h2 { font-size: 18px !important; }
+            .user-profile-top span:first-child { display: none; }
+            .premium-card { padding: 20px; }
+        }
+        .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); z-index: 1050; }
+        .overlay.active { display: block; }
+    </style>
 </head>
 <body>
-<div class="container mt-5">
-    <h1>User Management</h1>
+    <div class="overlay" id="overlay"></div>
 
-    <!-- Recherche par email -->
-    <form method="get" action="{{ url_for('users_page') }}" class="form-inline mb-3">
-        <input type="email" name="search_email" class="form-control mr-2" placeholder="Search by email" value="{{ request.query_params.get('search_email', '') }}">
-        <button type="submit" class="btn btn-primary">Search</button>
-        {% if request.query_params.get('search_email') %}
-            <a href="{{ url_for('users_page') }}" class="btn btn-secondary ml-2">Reset</a>
-        {% endif %}
-    </form>
-
-    <!-- Tableau des utilisateurs -->
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Number</th>
-                <th>Role</th>
-                <th>Balance</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for user in users %}
-            <tr>
-                <td>{{ user.id }}</td>
-                <td>{{ user.username }}</td>
-                <td>{{ user.email }}</td>
-                <td>{{ user.phone }}</td>
-                <td>{{ user.role }}</td>
-                <td>{{ user.balance }}</td>
-                <td>
-                    <form action="{{ url_for('delete_user_admin', user_uid=user.id) }}" method="POST" style="display:inline;">
-                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                    </form>
-                    <a href="{{ url_for('user_detail', user_uid=user.id) }}" class="btn btn-info btn-sm">Voir / Recharger</a>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <a href="{{ url_for('admin_home') }}" class="btn btn-secondary mb-4">Back to Admin Home</a>
-
-    <!-- Formulaire d'ajout d'utilisateur -->
-    <h2 class="mt-5">Add New User</h2>
-    <form action="{{ url_for('create_user_admin') }}" method="POST" class="mb-4">
-        <div class="form-row">
-            <div class="col"><input type="text" name="username" class="form-control" placeholder="Username" required></div>
-            <div class="col"><input type="email" name="email" class="form-control" placeholder="Email" required></div>
-            <div class="col"><input type="text" name="phone" class="form-control" placeholder="Phone" required></div>
-            <div class="col"><input type="password" name="password" class="form-control" placeholder="Password" required></div>
-            <div class="col"><input type="text" name="role" class="form-control" placeholder="Role" value="user"></div>
-            <div class="col"><input type="number" step="0.01" name="balance" class="form-control" placeholder="Balance" value="0.0"></div>
-            <div class="col"><button type="submit" class="btn btn-success">Add User</button></div>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-brand"><i class="fas fa-rocket"></i> Admin Panel</div>
+        <ul class="nav-menu">
+            <li class="nav-item"><a href="{{ url_for('admin_home') }}" class="nav-link"><i class="fas fa-th-large"></i> Dashboard</a></li>
+            <li class="nav-item"><a href="{{ url_for('users_page') }}" class="nav-link active"><i class="fas fa-users"></i> Utilisateurs</a></li>
+            <li class="nav-item"><a href="{{ url_for('locations_page') }}" class="nav-link"><i class="fas fa-map-marker-alt"></i> Locations</a></li>
+            <li class="nav-item"><a href="{{ url_for('rooms_page') }}" class="nav-link"><i class="fas fa-door-open"></i> Salles</a></li>
+            <li class="nav-item"><a href="{{ url_for('bookings_page') }}" class="nav-link"><i class="fas fa-calendar-check"></i> Réservations</a></li>
+            <li class="nav-item"><a href="{{ url_for('recharges_page') }}" class="nav-link"><i class="fas fa-history"></i> Historique</a></li>
+        </ul>
+        <div class="sidebar-footer">
+            <a href="{{ url_for('admin_profile') }}" class="nav-link"><i class="fas fa-user-circle"></i> Mon Profil</a>
+            <a href="{{ url_for('logout') }}" class="nav-link text-danger"><i class="fas fa-power-off"></i> Déconnexion</a>
         </div>
-    </form>
-</div>
+    </div>
+
+    <main class="main-content">
+        <header class="header-bar">
+            <div class="d-flex align-items-center">
+                <div class="mobile-nav-btn" id="sidebarOpen"><i class="fas fa-bars"></i></div>
+                <h2 class="font-weight-bold" style="font-size: 22px; margin: 0;">Utilisateurs</h2>
+            </div>
+            <div class="user-profile-top">
+                <span class="font-weight-bold">{{ admin_user.username }}</span>
+                <span class="role-badge-top">{{ admin_user.role.replace('_', ' ') }}</span>
+            </div>
+        </header>
+
+        {% if error %}<div class="alert alert-danger border-0 rounded-16 mb-4"><i class="fas fa-exclamation-circle mr-2"></i> {{ error }}</div>{% endif %}
+
+        {% if admin_user.role == 'admin' %}
+        <div class="premium-card">
+            <h4 class="mb-4 font-weight-bold small text-uppercase text-muted">Nouvel Utilisateur</h4>
+            <form action="{{ url_for('create_user_admin') }}" method="POST">
+                <div class="row">
+                    <div class="col-md-3 col-sm-6 mb-3"><input type="text" name="username" class="form-control" placeholder="Nom d'utilisateur" required></div>
+                    <div class="col-md-3 col-sm-6 mb-3"><input type="email" name="email" class="form-control" placeholder="Email" required></div>
+                    <div class="col-md-3 col-sm-6 mb-3"><input type="text" name="phone" class="form-control" placeholder="Téléphone" required></div>
+                    <div class="col-md-3 col-sm-6 mb-3"><div class="password-wrapper"><input type="password" name="password" class="form-control" placeholder="Mot de passe" required><i class="fas fa-eye toggle-password"></i></div></div>
+                    <div class="col-md-3 col-sm-6 mb-3"><select name="role" id="role-select" class="form-control"><option value="user">Utilisateur</option><option value="space_manager">Space Manager</option><option value="admin">Administrateur</option></select></div>
+                    <div class="col-md-3 col-sm-6 mb-3" id="balance-section"><input type="number" step="0.01" name="balance" class="form-control" placeholder="Solde Initial" value="0.0"></div>
+                    <div class="col-md-4 mb-3" id="locations-section" style="display: none;"><select name="location_ids" class="form-control" multiple>{% for loc in locations %}<option value="{{ loc.id }}">{{ loc.name }}</option>{% endfor %}</select></div>
+                    <div class="col-md-2 mb-3"><button type="submit" class="btn-premium btn-add w-100">Ajouter</button></div>
+                </div>
+            </form>
+        </div>
+        {% endif %}
+
+        <div class="premium-card py-3">
+            <form id="search-form" method="get" action="{{ url_for('users_page') }}" class="form-row align-items-center">
+                <div class="col-md-10 col-sm-9 mb-2 mb-md-0"><div class="search-wrapper"><i class="fas fa-search text-muted mr-3"></i><input type="text" id="search-input" name="search_email" class="form-control border-0 p-0 shadow-none" placeholder="Rechercher..." value="{{ request.query_params.get('search_email', '') }}"></div></div>
+                <div class="col-md-2 col-sm-3"><button type="submit" class="btn-premium btn-search w-100">Filtrer</button></div>
+            </form>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table">
+                <thead><tr><th>Utilisateur</th><th>Email</th><th>Rôle</th><th>Solde</th><th class="text-center">Actions</th></tr></thead>
+                <tbody id="user-table-body">
+                    {% for user in users %}
+                    <tr class="user-row">
+                        <td class="font-weight-bold user-name text-nowrap">{{ user.username }}</td>
+                        <td class="user-email text-nowrap">{{ user.email }}</td>
+                        <td>
+                            {% if user.role == 'admin' %}<span class="role-badge badge-admin">Admin</span>
+                            {% elif user.role == 'space_manager' %}<span class="role-badge badge-manager">Manager</span>
+                            {% else %}<span class="role-badge badge-user">User</span>{% endif %}
+                        </td>
+                        <td class="font-weight-bold text-primary text-nowrap">{{ user.balance }} DA</td>
+                        <td class="text-center text-nowrap">
+                            <a href="{{ url_for('user_detail', user_uid=user.id) }}" class="action-btn btn-view"><i class="fas fa-wallet"></i></a>
+                            <form action="{{ url_for('delete_user_admin', user_uid=user.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Supprimer ?');"><button type="submit" class="action-btn btn-delete"><i class="fas fa-trash-alt"></i></button></form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+        const openBtn = document.getElementById('sidebarOpen');
+        openBtn.addEventListener('click', () => { sidebar.classList.add('active'); overlay.classList.add('active'); });
+        overlay.addEventListener('click', () => { sidebar.classList.remove('active'); overlay.classList.remove('active'); });
+
+        document.getElementById('role-select').addEventListener('change', function() {
+            var ls = document.getElementById('locations-section'), bs = document.getElementById('balance-section');
+            if (this.value === 'space_manager') { ls.style.display = 'block'; bs.style.display = 'none'; }
+            else if (this.value === 'admin') { ls.style.display = 'none'; bs.style.display = 'none'; }
+            else { ls.style.display = 'none'; bs.style.display = 'block'; }
+        });
+        document.getElementById('search-input').addEventListener('input', function() {
+            var filter = this.value.toLowerCase();
+            document.querySelectorAll('.user-row').forEach(row => {
+                var e = row.querySelector('.user-email').textContent.toLowerCase(), n = row.querySelector('.user-name').textContent.toLowerCase();
+                row.style.display = (e.includes(filter) || n.includes(filter)) ? '' : 'none';
+            });
+        });
+        document.querySelectorAll('.toggle-password').forEach(icon => {
+            icon.addEventListener('click', function() {
+                const input = this.parentElement.querySelector('input');
+                input.type = input.type === 'password' ? 'text' : 'password';
+                this.classList.toggle('fa-eye-slash');
+            });
+        });
+    </script>
 </body>
 </html>

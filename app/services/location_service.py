@@ -9,7 +9,8 @@ def create_location(data):
     image_data = data.get('image_data')
     location = Location(
         name=data['name'],
-        image_data=image_data
+        image_data=image_data,
+        manager_id=data.get('manager_id')
     )
     db.session.add(location)
     db.session.commit()

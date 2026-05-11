@@ -3,12 +3,15 @@ load_dotenv()  # ← doit être en premier, avant tout autre import
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from db.database import Base, engine, db_session
 from api.router import api_router
 from core.exceptions import AppException, app_exception_handler
 
 app = FastAPI()
+
+app.mount("/static", StaticFiles(directory="."), name="static")
 
 app.add_middleware(
     CORSMiddleware,

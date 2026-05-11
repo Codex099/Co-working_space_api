@@ -31,8 +31,8 @@ class User(Base):
     is_verified      = Column(Boolean, default=False)                       # email vérifié ?
     created_at       = Column(DateTime, default=datetime.utcnow)
 
-    bookings         = relationship('Booking', backref='user')
-    recharges        = relationship('Recharge', backref='user')
+    bookings         = relationship('Booking', backref='user', cascade="all, delete-orphan")
+    recharges        = relationship('Recharge', backref='user', cascade="all, delete-orphan")
 
 
 class Location(Base):
@@ -40,7 +40,8 @@ class Location(Base):
     id         = Column(Integer, primary_key=True)
     name       = Column(String(100), nullable=False)
     image_data = Column(LargeBinary, nullable=True)
-    rooms      = relationship('Room', backref='location')
+    manager_id = Column(String(36), ForeignKey('users.id'), nullable=True) # ID of the Space Manager
+    rooms      = relationship('Room', backref='location', cascade="all, delete-orphan")
 
 
 class Room(Base):
@@ -51,7 +52,7 @@ class Room(Base):
     slot_price    = Column(Float, nullable=False)
     slot_duration = Column(Integer, nullable=False, default=60)  # en minutes, défaut 1h
     location_id   = Column(Integer, ForeignKey('locations.id'), nullable=False)
-    bookings      = relationship('Booking', backref='room')
+    bookings      = relationship('Booking', backref='room', cascade="all, delete-orphan")
     image_data    = Column(LargeBinary)
 
 

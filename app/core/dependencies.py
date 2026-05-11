@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from core.jwt import decode_access_token
 
@@ -38,7 +38,7 @@ async def get_current_user(res: HTTPAuthorizationCredentials = Depends(security)
             return {
                 "uid":      decoded["uid"],
                 "email":    decoded.get("email"),
-                "provider": decoded.get("firebase", {}).get("sign_in_provider", "firebase"),
+                "provider": "firebase",
                 "source":   "firebase"
             }
         except Exception:
@@ -71,3 +71,27 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     if not user or user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé")
     return current_user
+
+async def get_admin_user_from_cookie(request: Request):
+    """Dépendance pour les routes web admin (HTML) utilisant un cookie."""
+    token = request.cookies.get("admin_access_token")
+    if not token:
+        # Redirect to login page
+        raise HTTPException(status_code=status.HTTP_303_SEE_OTHER, headers={"Location": "/admin/login"})
+    
+    try:
+        payload = decode_access_token(token)
+        uid = payload.get("sub")
+        if not uid:
+            raise HTTPException(status_code=status.HTTP_303_SEE_OTHER, headers={"Location": "/admin/login"})
+        
+        from services.user_service import get_user_by_uid
+        user = get_user_by_uid(uid)
+        if not user or user.role not in ["admin", "space_manager"]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé. Rôle non autorisé.")
+        
+        # Add user to request state so templates can use it
+        request.state.admin_user = user
+        return user
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_303_SEE_OTHER, headers={"Location": "/admin/login"})

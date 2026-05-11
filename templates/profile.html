@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Détails Utilisateur | Admin</title>
+    <title>Mon Profil | Admin</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -15,7 +15,6 @@
             --sidebar-bg: #ffffff;
             --text-main: #1e293b;
             --text-muted: #64748b;
-            --success: #10b981;
         }
 
         body {
@@ -58,14 +57,21 @@
         .user-profile-top { display: flex; align-items: center; background: white; padding: 8px 16px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
         .role-badge-top { padding: 4px 10px; border-radius: 99px; background: #e0e7ff; color: #4338ca; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-left: 10px; }
 
-        .premium-card { background: white; border-radius: 24px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); padding: 35px; margin-bottom: 30px; }
-        .avatar-circle { width: 70px; height: 70px; background: var(--primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; margin-right: 20px; }
-        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; background: #f8fafc; padding: 20px; border-radius: 20px; margin-bottom: 30px; }
-        .balance-card { background: var(--primary); color: white; padding: 25px; border-radius: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
-        .section-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; display: flex; align-items: center; }
+        /* Profile Card */
+        .profile-card { background: white; border-radius: 24px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); padding: 40px; max-width: 800px; margin: 0 auto; }
+        .profile-avatar { width: 80px; height: 80px; background: var(--primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; margin-bottom: 15px; box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.3); }
+        .section-title { font-size: 16px; font-weight: 700; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #f1f5f9; display: flex; align-items: center; }
         .section-title i { margin-right: 10px; color: var(--primary); }
-        .table-responsive { border-radius: 16px; overflow: hidden; background: white; border: 1px solid #f1f5f9; }
-        .table thead th { background: #f8fafc; font-size: 11px; text-transform: uppercase; padding: 15px; color: var(--text-muted); }
+        .form-control { border-radius: 12px; padding: 12px 16px; border: 1px solid #e2e8f0; font-size: 15px; }
+        .btn-update { background: var(--primary); color: white; border: none; border-radius: 12px; padding: 12px; font-weight: 700; width: 100%; margin-top: 20px; transition: all 0.2s; }
+        .password-section { background: #f8fafc; padding: 20px; border-radius: 16px; margin-top: 25px; border: 1px dashed #e2e8f0; }
+        .password-wrapper { position: relative; }
+        .toggle-password { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); cursor: pointer; color: var(--text-muted); }
+        .info-box { background: #f1f5f9; border-radius: 16px; padding: 20px; margin-bottom: 10px; }
+        .info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e2e8f0; }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { color: var(--text-muted); font-size: 14px; }
+        .info-value { font-weight: 600; font-size: 15px; }
 
         /* RESPONSIVE */
         @media (max-width: 992px) {
@@ -75,8 +81,7 @@
             .main-content { padding: 20px; }
             .header-bar h2 { font-size: 18px !important; }
             .user-profile-top span:first-child { display: none; }
-            .premium-card { padding: 25px; }
-            .avatar-circle { width: 50px; height: 50px; font-size: 20px; }
+            .profile-card { padding: 25px; }
         }
         .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); z-index: 1050; }
         .overlay.active { display: block; }
@@ -89,14 +94,14 @@
         <div class="sidebar-brand"><i class="fas fa-rocket"></i> Admin Panel</div>
         <ul class="nav-menu">
             <li class="nav-item"><a href="{{ url_for('admin_home') }}" class="nav-link"><i class="fas fa-th-large"></i> Dashboard</a></li>
-            <li class="nav-item"><a href="{{ url_for('users_page') }}" class="nav-link active"><i class="fas fa-users"></i> Utilisateurs</a></li>
+            <li class="nav-item"><a href="{{ url_for('users_page') }}" class="nav-link"><i class="fas fa-users"></i> Utilisateurs</a></li>
             <li class="nav-item"><a href="{{ url_for('locations_page') }}" class="nav-link"><i class="fas fa-map-marker-alt"></i> Locations</a></li>
             <li class="nav-item"><a href="{{ url_for('rooms_page') }}" class="nav-link"><i class="fas fa-door-open"></i> Salles</a></li>
             <li class="nav-item"><a href="{{ url_for('bookings_page') }}" class="nav-link"><i class="fas fa-calendar-check"></i> Réservations</a></li>
             <li class="nav-item"><a href="{{ url_for('recharges_page') }}" class="nav-link"><i class="fas fa-history"></i> Historique</a></li>
         </ul>
         <div class="sidebar-footer">
-            <a href="{{ url_for('admin_profile') }}" class="nav-link"><i class="fas fa-user-circle"></i> Mon Profil</a>
+            <a href="{{ url_for('admin_profile') }}" class="nav-link active"><i class="fas fa-user-circle"></i> Mon Profil</a>
             <a href="{{ url_for('logout') }}" class="nav-link text-danger"><i class="fas fa-power-off"></i> Déconnexion</a>
         </div>
     </div>
@@ -105,7 +110,7 @@
         <header class="header-bar">
             <div class="d-flex align-items-center">
                 <div class="mobile-nav-btn" id="sidebarOpen"><i class="fas fa-bars"></i></div>
-                <h2 class="font-weight-bold" style="font-size: 22px; margin: 0;">Détails</h2>
+                <h2 class="font-weight-bold" style="font-size: 22px; margin: 0;">Profil</h2>
             </div>
             <div class="user-profile-top">
                 <span class="font-weight-bold">{{ admin_user.username }}</span>
@@ -113,39 +118,45 @@
             </div>
         </header>
 
-        <div class="premium-card">
+        {% if success %}<div class="alert alert-success border-0 rounded-16 mb-4"><i class="fas fa-check-circle mr-2"></i> {{ success }}</div>{% endif %}
+        {% if error %}<div class="alert alert-danger border-0 rounded-16 mb-4"><i class="fas fa-exclamation-circle mr-2"></i> {{ error }}</div>{% endif %}
+
+        <div class="profile-card">
             <div class="d-flex align-items-center mb-4">
-                <div class="avatar-circle">{{ user.username[0].upper() }}</div>
-                <div><h3 class="font-weight-bold mb-0">{{ user.username }}</h3><p class="text-muted mb-0 small">{{ user.email }}</p></div>
-            </div>
-            <div class="info-grid">
-                <div><label class="small text-muted font-weight-bold">Téléphone</label><div class="font-weight-bold">{{ user.phone or 'N/A' }}</div></div>
-                <div><label class="small text-muted font-weight-bold">Rôle</label><div class="font-weight-bold text-capitalize small">{{ user.role.replace('_', ' ') }}</div></div>
-            </div>
-            <div class="balance-card">
-                <div><div class="small opacity-75">Solde Actuel</div><div class="h2 font-weight-bold mb-0">{{ balance }} DA</div></div>
-                <i class="fas fa-wallet fa-3x opacity-25 d-none d-sm-block"></i>
+                <div class="profile-avatar mr-3 mb-0">{{ admin_user.username[0].upper() if admin_user.username else 'A' }}</div>
+                <div>
+                    <h3 class="font-weight-bold mb-1">{{ admin_user.username }}</h3>
+                    <span class="badge badge-primary px-3 py-1 rounded-pill small uppercase">{{ admin_user.role.replace('_', ' ') }}</span>
+                </div>
             </div>
 
             {% if admin_user.role == 'admin' %}
-            <div class="section-title"><i class="fas fa-plus-circle"></i> Recharger</div>
-            <form method="post" action="{{ url_for('update_balance', user_uid=user.id) }}" class="form-row align-items-center mb-5">
-                <div class="col-md-8 col-sm-7 mb-2 mb-md-0"><input type="number" step="0.01" name="balance" class="form-control" placeholder="Montant"></div>
-                <div class="col-md-4 col-sm-5"><button type="submit" class="btn btn-success btn-block font-weight-bold py-2 rounded-12">Valider</button></div>
-            </form>
-            {% endif %}
+                <div class="alert alert-info border-0 rounded-16 mb-4"><i class="fas fa-info-circle mr-2"></i> Les administrateurs ont un profil en lecture seule.</div>
+                <div class="section-title"><i class="fas fa-user"></i> Informations</div>
+                <div class="info-box">
+                    <div class="info-row"><span class="info-label">Email</span><span class="info-value">{{ admin_user.email }}</span></div>
+                    <div class="info-row"><span class="info-label">Téléphone</span><span class="info-value">{{ admin_user.phone or 'N/A' }}</span></div>
+                </div>
+            {% else %}
+                <form id="profileForm" action="{{ url_for('admin_profile_update') }}" method="POST">
+                    <div class="section-title"><i class="fas fa-user-edit"></i> Informations personnelles</div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3"><label class="small font-weight-bold">Utilisateur</label><input type="text" name="username" class="form-control" value="{{ admin_user.username }}" required></div>
+                        <div class="col-md-6 mb-3"><label class="small font-weight-bold">Téléphone</label><input type="text" name="phone" class="form-control" value="{{ admin_user.phone or '' }}"></div>
+                    </div>
+                    <div class="mb-3"><label class="small font-weight-bold">Email</label><input type="email" name="email" class="form-control" value="{{ admin_user.email }}" required></div>
 
-            <div class="section-title"><i class="fas fa-history"></i> Historique</div>
-            <div class="table-responsive">
-                <table class="table">
-                    <thead><tr><th>Date & Heure</th><th>Montant</th></tr></thead>
-                    <tbody>
-                        {% for recharge in recharges %}
-                        <tr><td class="text-nowrap"><div class="font-weight-bold">{{ recharge.date.strftime('%d/%m/%Y') }}</div><small class="text-muted">{{ recharge.date.strftime('%H:%M') }}</small></td><td class="font-weight-bold text-success text-nowrap">{{ recharge.amount }} DA</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+                    <div class="password-section">
+                        <div class="section-title"><i class="fas fa-lock"></i> Sécurité</div>
+                        <div class="mb-3"><label class="small font-weight-bold">Mot de passe actuel *</label><div class="password-wrapper"><input type="password" name="current_password" class="form-control" required placeholder="Requis"><i class="fas fa-eye toggle-password"></i></div></div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3"><label class="small font-weight-bold">Nouveau</label><div class="password-wrapper"><input type="password" id="new_password" name="new_password" class="form-control" minlength="6"><i class="fas fa-eye toggle-password"></i></div></div>
+                            <div class="col-md-6 mb-3"><label class="small font-weight-bold">Confirmer</label><div class="password-wrapper"><input type="password" id="confirm_password" name="confirm_password" class="form-control"><i class="fas fa-eye toggle-password"></i></div></div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-update">Mettre à jour</button>
+                </form>
+            {% endif %}
         </div>
     </main>
 
@@ -155,6 +166,14 @@
         const openBtn = document.getElementById('sidebarOpen');
         openBtn.addEventListener('click', () => { sidebar.classList.add('active'); overlay.classList.add('active'); });
         overlay.addEventListener('click', () => { sidebar.classList.remove('active'); overlay.classList.remove('active'); });
+
+        document.querySelectorAll('.toggle-password').forEach(icon => {
+            icon.addEventListener('click', function() {
+                const input = this.parentElement.querySelector('input');
+                input.type = input.type === 'password' ? 'text' : 'password';
+                this.classList.toggle('fa-eye-slash');
+            });
+        });
     </script>
 </body>
 </html>

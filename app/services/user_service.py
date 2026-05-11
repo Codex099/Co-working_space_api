@@ -29,6 +29,13 @@ import uuid
 def get_user_by_email(email: str):
     return User.query.filter_by(email=email).first()
 
+def search_users_by_email(email: str):
+    """Recherche partielle par email."""
+    return User.query.filter(User.email.like(f"%{email}%")).all()
+
+def get_user_by_username(username: str):
+    return User.query.filter_by(username=username).first()
+
 def get_user_by_phone(phone: str):
     return User.query.filter_by(phone=phone).first()
 

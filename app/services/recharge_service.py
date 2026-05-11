@@ -7,7 +7,7 @@ def create_recharge_db(data):
     user = get_user_by_uid(data['user_id'])
     if not user:
         return None
-    recharge = Recharge(user_id=user.firebase_uid, amount=data['amount'], date=datetime.utcnow())
+    recharge = Recharge(user_id=user.id, amount=data['amount'], date=datetime.utcnow())
     db.session.add(recharge)
     user.balance += data['amount']
     db.session.add(user)
