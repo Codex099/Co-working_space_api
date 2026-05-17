@@ -193,11 +193,14 @@ def send_phone_code_logic(uid: str, phone: str):
 
     return {"message": "Code SMS envoyé avec succès", "phone": phone}, 200
 
-
 def verify_phone_code_logic(uid: str, phone: str, code: str):
     """
     Étape 2 : Vérifie le code SMS et enregistre le numéro.
     """
+    user = get_user_by_uid(uid)
+    if user and user.phone == phone:
+        return {"message": "Numéro de téléphone déjà vérifié et enregistré", "phone": phone}, 200
+
     data = phone_codes.get(phone)
     if not data:
         return {"error": "Aucun code en attente pour ce numéro"}, 400
