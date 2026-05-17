@@ -6,20 +6,21 @@ from services.email_service import (
     generate_code, send_verification_email,
     verification_codes, pending_local_users
 )
+from services.sms_service import generate_sms_code, send_sms_code, phone_codes
 import uuid
 
+pending_email_updates: dict = {}
 # ============================================================
-#  USER SERVICE — Logique métier auth hybride
+#  USER SERVICE — Logique métier auth locale + SMS
 #  ┌─────────────────────────────────────────────────────┐
 #  │  LOCAL SIGNUP FLOW :                                │
 #  │  1. local_signup_request() → génère code + envoie  │
 #  │  2. confirm_local_signup() → vérifie code + crée   │
 #  │  3. local_login()          → vérifie mdp → JWT     │
 #  ├─────────────────────────────────────────────────────┤
-#  │  FIREBASE FLOW :                                    │
-#  │  1. firebase_auth_or_create() → vérifie token      │
-#  │                               → crée si nouveau    │
-#  │                               → retourne JWT local │
+#  │  PHONE VERIFICATION (Brevo SMS) :                   │
+#  │  1. send_phone_code_logic() → envoie SMS            │
+#  │  2. verify_phone_code_logic() → vérifie et sauve    │
 #  └─────────────────────────────────────────────────────┘
 # ============================================================
 
@@ -84,7 +85,6 @@ def local_signup_request(data: dict):
     pending_local_users[email] = {
         "username": data["username"],
         "email":    email,
-        "phone":    data["phone"],
         "password": data["password"],   # sera hashé à la confirmation
     }
 
@@ -113,12 +113,12 @@ def confirm_local_signup(email: str, code: str):
     if not pending:
         return {"error": "Données utilisateur introuvables"}, 400
 
-    # Créer le user avec mot de passe hashé
+    # Créer le user avec mot de passe hashé (sans téléphone — ajouté via /confirm-phone)
     user = User(
         id              = str(uuid.uuid4()),
         email           = pending["email"],
         username        = pending["username"],
-        phone           = pending["phone"],
+        phone           = None,
         hashed_password = hash_password(pending["password"]),   # hash bcrypt
         auth_provider   = "local",
         firebase_uid    = None,                                  # local → pas de firebase_uid
@@ -170,63 +170,61 @@ def local_login(email: str, password: str):
     }, 200
 
 
-# ─── Auth Firebase ────────────────────────────────────────────
+# ─── Vérification téléphone (SMS Brevo) ────────────────────────────────
 
-def firebase_auth_or_create(firebase_token: str, phone: str = None):
+def send_phone_code_logic(uid: str, phone: str):
     """
-    Vérifie le token Firebase et crée/récupère le user en DB.
-    Retourne un JWT local unifié (même flow que auth locale).
+    Étape 1 : Génère et envoie un code SMS.
     """
-    try:
-        from firebase_admin import auth as firebase_auth
-        decoded = firebase_auth.verify_id_token(firebase_token)
-    except Exception:
-        return {"error": "Token Firebase invalide"}, 401
-
-    firebase_uid = decoded["uid"]
-    email        = decoded.get("email", "")
-    username     = decoded.get("name", email.split("@")[0])
-    provider     = decoded.get("firebase", {}).get("sign_in_provider", "firebase")
-
-    # Chercher le user par firebase_uid ou email
-    user = get_user_by_firebase_uid(firebase_uid) or get_user_by_email(email)
-
+    user = get_user_by_uid(uid)
     if not user:
-        # Nouveau user Firebase → créer en DB
-        user = User(
-            id            = str(uuid.uuid4()),
-            email         = email,
-            username      = username,
-            phone         = phone,
-            auth_provider = provider,
-            firebase_uid  = firebase_uid,
-            hashed_password = None,      # Firebase → pas de mdp local
-            is_verified   = True,        # Firebase a déjà vérifié l'email
-        )
-        db.session.add(user)
-        db.session.commit()
-    else:
-        # User existant → mettre à jour le firebase_uid si manquant
-        if not user.firebase_uid:
-            user.firebase_uid = firebase_uid
-            db.session.commit()
+        return {"error": "Utilisateur introuvable"}, 404
 
-    # Générer notre propre JWT (même format que auth locale)
-    token = create_access_token({"sub": user.id, "email": user.email})
-    return {
-        "access_token": token,
-        "token_type":   "bearer",
-        "user": {
-            "id":       user.id,
-            "email":    user.email,
-            "username": user.username,
-            "role":     user.role,
-            "balance":  user.balance,
-        }
-    }, 200
+    # Vérifier que le numéro n'est pas déjà pris
+    existing = get_user_by_phone(phone)
+    if existing and existing.id != uid:
+        return {"error": "Ce numéro de téléphone est déjà utilisé"}, 409
+
+    code = generate_sms_code()
+    phone_codes[phone] = {"code": code, "uid": uid}
+
+    # Envoi du SMS (ou affichage terminal en mode DEV)
+    send_sms_code(phone, code)
+
+    return {"message": "Code SMS envoyé avec succès", "phone": phone}, 200
 
 
-# ─── Fonctions utilitaires (conservées) ──────────────────────
+def verify_phone_code_logic(uid: str, phone: str, code: str):
+    """
+    Étape 2 : Vérifie le code SMS et enregistre le numéro.
+    """
+    data = phone_codes.get(phone)
+    if not data:
+        return {"error": "Aucun code en attente pour ce numéro"}, 400
+
+    if data["uid"] != uid:
+        return {"error": "Le code n'appartient pas à cet utilisateur"}, 403
+
+    if data["code"] != code:
+        return {"error": "Code SMS invalide"}, 401
+
+    # Code correct → on enregistre le téléphone
+    user = get_user_by_uid(uid)
+    if not user:
+        return {"error": "Utilisateur introuvable"}, 404
+
+    user.phone = phone
+    db.session.commit()
+
+    # Nettoyage
+    del phone_codes[phone]
+
+    return {"message": "Numéro de téléphone vérifié et enregistré", "phone": phone}, 200
+
+
+
+
+# ─── Fonctions utilitaires (conservées) ──────────────────────────────
 
 def create_user_db(data: dict):
     """Création directe en DB (utilisé par l'admin)."""
@@ -271,10 +269,67 @@ def update_user_by_uid(uid: str, data: dict):
     if not user:
         return {"error": "Utilisateur introuvable"}, 404
     if "username" in data: user.username = data["username"]
-    if "email"    in data: user.email    = data["email"]
-    if "phone"    in data: user.phone    = data["phone"]
+    # email et phone sont retirés pour utiliser les routes sécurisées
     save_user(user)
     return {"message": "Profil mis à jour"}, 200
+
+def update_password_logic(uid: str, old_password: str, new_password: str):
+    user = get_user_by_uid(uid)
+    if not user:
+        return {"error": "Utilisateur introuvable"}, 404
+    if not user.hashed_password or not verify_password(old_password, user.hashed_password):
+        return {"error": "Ancien mot de passe incorrect"}, 401
+    
+    user.hashed_password = hash_password(new_password)
+    save_user(user)
+    return {"message": "Mot de passe mis à jour avec succès"}, 200
+
+def request_email_update_logic(uid: str, new_email: str):
+    user = get_user_by_uid(uid)
+    if not user:
+        return {"error": "Utilisateur introuvable"}, 404
+    
+    new_email = new_email.lower().strip()
+    if get_user_by_email(new_email):
+        return {"error": "Cet email est déjà utilisé"}, 409
+    
+    code = generate_code()
+    verification_codes[new_email] = code
+    pending_email_updates[new_email] = uid
+    
+    sent = send_verification_email(new_email, code, username=user.username)
+    if not sent:
+        return {"error": "Erreur lors de l'envoi de l'email"}, 500
+        
+    return {"message": "Code de vérification envoyé au nouvel email", "email": new_email}, 200
+
+def confirm_email_update_logic(uid: str, code: str):
+    target_email = None
+    for email, pending_uid in pending_email_updates.items():
+        if pending_uid == uid:
+            target_email = email
+            break
+            
+    if not target_email:
+        return {"error": "Aucune demande de modification d'email en cours"}, 400
+        
+    expected_code = verification_codes.get(target_email)
+    if not expected_code or expected_code != code:
+        return {"error": "Code invalide"}, 401
+        
+    user = get_user_by_uid(uid)
+    if not user:
+        return {"error": "Utilisateur introuvable"}, 404
+        
+    user.email = target_email
+    save_user(user)
+    
+    if target_email in verification_codes:
+        del verification_codes[target_email]
+    if target_email in pending_email_updates:
+        del pending_email_updates[target_email]
+    
+    return {"message": "Email mis à jour avec succès", "email": target_email}, 200
 
 def _user_to_dict(user) -> dict:
     return {

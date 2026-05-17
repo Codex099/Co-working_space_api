@@ -5,10 +5,14 @@ from services.user_service import (
     get_user_by_email_logic,
     get_user_by_uid_logic,
     update_user_by_uid,
+    update_password_logic,
+    request_email_update_logic,
+    confirm_email_update_logic,
     local_signup_request,
     confirm_local_signup,
     local_login,
-    firebase_auth_or_create,
+    send_phone_code_logic,
+    verify_phone_code_logic,
     _user_to_dict,
     get_user_by_uid,
 )
@@ -17,8 +21,14 @@ from schemas import (
     LocalSignupRequest,
     LocalLoginRequest,
     ConfirmEmailRequest,
-    FirebaseAuthRequest,
+    SendPhoneCodeRequest,
+    VerifyPhoneCodeRequest,
     UpdateUserRequest,
+    UpdatePasswordRequest,
+    UpdateEmailRequest,
+    ConfirmUpdateEmailRequest,
+    PhoneUpdateRequest,
+    PhoneVerifyRequest,
 )
 from core.dependencies import get_current_user
 
@@ -58,24 +68,6 @@ async def local_login_route(data: LocalLoginRequest):
     resp, code = local_login(data.email, data.password)
     return JSONResponse(content=resp, status_code=code)
 
-
-# ============================================================
-#  AUTH FIREBASE — Token Firebase → JWT local
-# ============================================================
-
-@router.post('/auth/firebase', tags=["Auth Firebase"])
-async def firebase_auth_route(data: FirebaseAuthRequest):
-    """
-    Le client Flutter envoie le token Firebase ID.
-    → Le backend vérifie avec Firebase Admin SDK.
-    → Crée ou récupère le user en DB.
-    → Retourne un JWT local (même format que auth locale).
-    Après ce point, le client utilise UNIQUEMENT le JWT local.
-    """
-    resp, code = firebase_auth_or_create(data.firebase_token, data.phone)
-    return JSONResponse(content=resp, status_code=code)
-
-
 # ============================================================
 #  ROUTES PROTÉGÉES (JWT requis — Firebase OU local)
 # ============================================================
@@ -111,3 +103,28 @@ def get_user_by_email_route(email: str, current_user: dict = Depends(get_current
     return JSONResponse(content=resp, status_code=code)
 
 
+@router.put('/me/password', tags=["update"])
+def update_password_route(data: UpdatePasswordRequest, current_user: dict = Depends(get_current_user)):
+    resp, code = update_password_logic(current_user["uid"], data.old_password, data.new_password)
+    return JSONResponse(content=resp, status_code=code)
+
+@router.post('/me/email/request', tags=["update"])
+def request_email_update_route(data: UpdateEmailRequest, current_user: dict = Depends(get_current_user)):
+    resp, code = request_email_update_logic(current_user["uid"], data.new_email)
+    return JSONResponse(content=resp, status_code=code)
+
+@router.post('/me/email/confirm', tags=["update"])
+def confirm_email_update_route(data: ConfirmUpdateEmailRequest, current_user: dict = Depends(get_current_user)):
+    resp, code = confirm_email_update_logic(current_user["uid"], data.code)
+    return JSONResponse(content=resp, status_code=code)
+@router.post('/me/phone/send-code', tags=["Téléphone"])
+def update_phone_send_code_route(data: PhoneUpdateRequest, current_user: dict = Depends(get_current_user)):
+    # Réutilise la logique existante mais force l'UID du token
+    resp, code = send_phone_code_logic(current_user["uid"], data.phone)
+    return JSONResponse(content=resp, status_code=code)
+
+@router.post('/me/phone/verify-code', tags=["Téléphone"])
+def update_phone_verify_code_route(data: PhoneVerifyRequest, current_user: dict = Depends(get_current_user)):
+    # Réutilise la logique existante mais force l'UID du token
+    resp, code = verify_phone_code_logic(current_user["uid"], data.phone, data.code)
+    return JSONResponse(content=resp, status_code=code)

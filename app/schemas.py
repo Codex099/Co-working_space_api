@@ -11,31 +11,17 @@ import re
 # ─── Auth locale ────────────────────────────────────────────
 
 class LocalSignupRequest(BaseModel):
-    """Inscription avec email + mot de passe (auth locale)."""
+    """Inscription avec email + mot de passe (auth locale). Sans téléphone."""
     username: str
     email: EmailStr          # valide le format email automatiquement
-    phone: str
     password: str
 
     @field_validator("password")
     @classmethod
     def password_strength(cls, v):
-        """Mot de passe : min 8 chars, 1 majuscule, 1 chiffre."""
+        """Mot de passe : min 8 chars."""
         if len(v) < 8:
             raise ValueError("Le mot de passe doit faire au moins 8 caractères")
-        if not re.search(r"[A-Z]", v):
-            raise ValueError("Le mot de passe doit contenir au moins une majuscule")
-        if not re.search(r"\d", v):
-            raise ValueError("Le mot de passe doit contenir au moins un chiffre")
-        return v
-
-    @field_validator("phone")
-    @classmethod
-    def phone_format(cls, v):
-        """Téléphone : chiffres uniquement, 9–15 caractères."""
-        cleaned = re.sub(r"[\s\-\+\(\)]", "", v)
-        if not cleaned.isdigit() or not (9 <= len(cleaned) <= 15):
-            raise ValueError("Numéro de téléphone invalide")
         return v
 
 
@@ -51,19 +37,27 @@ class LocalLoginRequest(BaseModel):
     password: str
 
 
-# ─── Auth Firebase ───────────────────────────────────────────
+# ─── Vérification téléphone (SMS Brevo) ──────────────────────
 
-class FirebaseAuthRequest(BaseModel):
-    """
-    Token Firebase envoyé depuis le client Flutter.
-    Le backend le vérifie et crée/récupère le user en DB.
-    """
-    firebase_token: str
-    email:    EmailStr       
-    username: str 
-    phone:    str    
-       
-    
+class SendPhoneCodeRequest(BaseModel):
+    """Demande d'envoi d'un code SMS."""
+    uid:   str
+    phone: str
+
+    @field_validator("phone")
+    @classmethod
+    def phone_format(cls, v):
+        """Téléphone : chiffres uniquement, 9–15 caractères."""
+        cleaned = re.sub(r"[\s\-\+\(\)]", "", v)
+        if not cleaned.isdigit() or not (9 <= len(cleaned) <= 15):
+            raise ValueError("Numéro de téléphone invalide (9–15 chiffres)")
+        return v
+
+class VerifyPhoneCodeRequest(BaseModel):
+    """Vérification du code SMS reçu."""
+    uid:   str
+    phone: str
+    code:  str
 
 
 # ─── User général ────────────────────────────────────────────
@@ -80,9 +74,24 @@ class UserCreate(BaseModel):
 
 class UpdateUserRequest(BaseModel):
     username: Optional[str] = None
-    email:    Optional[EmailStr] = None
-    phone:    Optional[str] = None
+    # email et phone retirés car gérés par des routes dédiées sécurisées
 
+class UpdatePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+class UpdateEmailRequest(BaseModel):
+    new_email: EmailStr
+
+class ConfirmUpdateEmailRequest(BaseModel):
+    code: str
+
+class PhoneUpdateRequest(BaseModel):
+    phone: str
+
+class PhoneVerifyRequest(BaseModel):
+    phone: str
+    code: str
 
 
 
