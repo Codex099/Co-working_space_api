@@ -91,7 +91,7 @@ async def firebase_auth_route(data: FirebaseAuthRequest):
 #  ROUTES PROTÉGÉES (JWT requis — Firebase OU local)
 # ============================================================
 
-@router.get('/me', tags=["Users"])
+@router.get('/me')
 async def get_me(current_user: dict = Depends(get_current_user)):
     """
     Retourne le profil complet de l'utilisateur connecté.
@@ -103,20 +103,16 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
     return _user_to_dict(user)
 
-
-"""@router.get('/users/{uid}', tags=["Users"])
-def get_user_by_uid_route(uid: str, current_user: dict = Depends(get_current_user)):
-    resp, code = get_user_by_uid_logic(uid)
+@router.put('/me', tags=["update"])
+def update_profile_route(data: UpdateUserRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Met à jour les informations de profil (ex: username) de l'utilisateur connecté.
+    """
+    resp, code = update_user_by_uid(current_user["uid"], data.model_dump(exclude_unset=True))
     return JSONResponse(content=resp, status_code=code)
 
 
-@router.put('/users/{uid}', tags=["Users"])
-def update_user_by_uid_route(uid: str, data: UpdateUserRequest, current_user: dict = Depends(get_current_user)):
-    resp, code = update_user_by_uid(uid, data.model_dump(exclude_unset=True))
-    return JSONResponse(content=resp, status_code=code)"""
-
-
-@router.get('/users/email/{email}', tags=["Users"])
+@router.get('/users/email/{email}')
 def get_user_by_email_route(email: str, current_user: dict = Depends(get_current_user)):
     resp, code = get_user_by_email_logic(email)
     return JSONResponse(content=resp, status_code=code)

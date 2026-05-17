@@ -7,7 +7,7 @@ api_router = APIRouter()
 async def home():
     return "this is my api"
 
-api_router.include_router(users.router, tags=["users"])
+api_router.include_router(users.router, tags=["Users"])
 api_router.include_router(bookings.router, tags=["bookings"])
 api_router.include_router(locations.router, tags=["locations"])
 api_router.include_router(admin.admin_bp, tags=["M3alem"] )
