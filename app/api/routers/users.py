@@ -82,7 +82,7 @@ async def firebase_auth_route(data: FirebaseAuthRequest):
     → Retourne un JWT local (même format que auth locale).
     Après ce point, le client utilise UNIQUEMENT le JWT local.
     """
-    resp, code = firebase_auth_or_create(data.firebase_token, data.phone)
+    resp, code = firebase_auth_or_create(data.firebase_token)
     return JSONResponse(content=resp, status_code=code)
 
 
