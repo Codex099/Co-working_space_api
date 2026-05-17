@@ -3,7 +3,7 @@ uvicorn[standard]
 pydantic[email]
 python-multipart
 sqlalchemy
-psycopg[binary]
+psycopg[binary]  # driver postgresql
 jinja2
 passlib[bcrypt]
 bcrypt<4.0.0
@@ -11,5 +11,7 @@ python-jose[cryptography]
 firebase-admin
 email-validator
 dnspython
-python-dotenv
-httpx
+python-dotenv  # pour le fichier .env
+httpx # requete http pour brevo 
+fastapi-mcp
+    

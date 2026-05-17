@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()  # ← doit être en premier, avant tout autre import
 
 from fastapi import FastAPI
+from fastapi_mcp import FastApiMCP
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -36,6 +37,10 @@ def on_startup():
 def on_shutdown():
     db_session.remove()
 
+mcp = FastApiMCP(app, name="Coworking")
+mcp.mount()
+
 if __name__ == '__main__':
+    
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
