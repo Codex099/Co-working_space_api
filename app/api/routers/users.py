@@ -104,7 +104,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     return _user_to_dict(user)
 
 
-@router.get('/users/{uid}', tags=["Users"])
+"""@router.get('/users/{uid}', tags=["Users"])
 def get_user_by_uid_route(uid: str, current_user: dict = Depends(get_current_user)):
     resp, code = get_user_by_uid_logic(uid)
     return JSONResponse(content=resp, status_code=code)
@@ -113,7 +113,7 @@ def get_user_by_uid_route(uid: str, current_user: dict = Depends(get_current_use
 @router.put('/users/{uid}', tags=["Users"])
 def update_user_by_uid_route(uid: str, data: UpdateUserRequest, current_user: dict = Depends(get_current_user)):
     resp, code = update_user_by_uid(uid, data.model_dump(exclude_unset=True))
-    return JSONResponse(content=resp, status_code=code)
+    return JSONResponse(content=resp, status_code=code)"""
 
 
 @router.get('/users/email/{email}', tags=["Users"])
