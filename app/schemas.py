@@ -93,6 +93,10 @@ class PhoneVerifyRequest(BaseModel):
     phone: str
     code: str
 
+class FirebaseAuthRequest(BaseModel):
+    firebase_token: str
+    
+
 
 
 # ─── Booking ─────────────────────────────────────────────────

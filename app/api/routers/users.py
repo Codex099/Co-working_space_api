@@ -15,6 +15,7 @@ from services.user_service import (
     verify_phone_code_logic,
     _user_to_dict,
     get_user_by_uid,
+    firebase_auth_or_create,
 )
 from schemas import (
     UserCreate,
@@ -29,6 +30,7 @@ from schemas import (
     ConfirmUpdateEmailRequest,
     PhoneUpdateRequest,
     PhoneVerifyRequest,
+    FirebaseAuthRequest,
 )
 from core.dependencies import get_current_user
 
@@ -67,6 +69,23 @@ async def local_login_route(data: LocalLoginRequest):
     """
     resp, code = local_login(data.email, data.password)
     return JSONResponse(content=resp, status_code=code)
+# ============================================================
+#  AUTH FIREBASE — Token Firebase → JWT local
+# ============================================================
+
+@router.post('/auth/firebase', tags=["Auth Firebase"])
+async def firebase_auth_route(data: FirebaseAuthRequest):
+    """
+    Le client Flutter envoie le token Firebase ID.
+    → Le backend vérifie avec Firebase Admin SDK.
+    → Crée ou récupère le user en DB.
+    → Retourne un JWT local (même format que auth locale).
+    Après ce point, le client utilise UNIQUEMENT le JWT local.
+    """
+    resp, code = firebase_auth_or_create(data.firebase_token, data.phone)
+    return JSONResponse(content=resp, status_code=code)
+
+
 
 # ============================================================
 #  ROUTES PROTÉGÉES (JWT requis — Firebase OU local)

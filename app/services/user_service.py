@@ -344,3 +344,67 @@ def _user_to_dict(user) -> dict:
         "is_verified":  user.is_verified,
     }
 
+def firebase_auth_or_create(firebase_token: str, phone_fallback: str = None):
+    """
+    Vérifie le token Firebase ID.
+    Récupère ou crée l'utilisateur en base, puis retourne un JWT local.
+    """
+    from firebase_admin import auth as firebase_auth
+    try:
+        decoded = firebase_auth.verify_id_token(firebase_token)
+    except Exception as e:
+        return {"error": f"Token Firebase invalide : {str(e)}"}, 401
+
+    firebase_uid = decoded.get("uid")
+    email = decoded.get("email")
+    phone = phone_fallback
+    name = decoded.get("name") or (email.split("@")[0] if email else "FirebaseUser")
+
+    # 1. Chercher par firebase_uid
+    user = get_user_by_firebase_uid(firebase_uid)
+
+    # 2. Sinon, chercher par email
+    if not user and email:
+        user = get_user_by_email(email)
+        if user:
+            # Lier le compte local existant à Firebase
+            user.firebase_uid = firebase_uid
+            user.auth_provider = "firebase"
+            if phone and not user.phone:
+                user.phone = phone
+            save_user(user)
+
+    # 3. Sinon, chercher par téléphone
+    if not user and phone:
+        user = get_user_by_phone(phone)
+        if user:
+            user.firebase_uid = firebase_uid
+            user.auth_provider = "firebase"
+            if email and not user.email:
+                user.email = email
+            save_user(user)
+
+    # 4. Si toujours introuvable, créer un nouveau compte
+    if not user:
+        user = User(
+            id=str(uuid.uuid4()),
+            firebase_uid=firebase_uid,
+            username=name,
+            email=email or f"{firebase_uid}@firebase.temp", # email unique temporaire si manquant
+            phone=phone,
+            auth_provider="firebase",
+            is_verified=True,
+            role="user",
+            balance=0.0
+        )
+        db.session.add(user)
+        db.session.commit()
+
+    # Générer notre JWT local
+    token = create_access_token({"sub": user.id, "email": user.email})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": _user_to_dict(user)
+    }, 200
+
