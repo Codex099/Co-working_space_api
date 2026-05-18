@@ -4,6 +4,7 @@ from services.user_service import (
     create_user,
     get_user_by_email_logic,
     get_user_by_uid_logic,
+    get_balance_history_logic,
     update_user_by_uid,
     update_password_logic,
     request_email_update_logic,
@@ -103,6 +104,11 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
     return _user_to_dict(user)
 
+@router.get('/me/balance-history')
+def get_balance_history_route(current_user: dict = Depends(get_current_user)):
+    resp, code = get_balance_history_logic(current_user["uid"])
+    return JSONResponse(content=resp, status_code=code)
+
 @router.put('/me', tags=["update"])
 def update_profile_route(data: UpdateUserRequest, current_user: dict = Depends(get_current_user)):
     """
@@ -120,7 +126,11 @@ def get_user_by_email_route(email: str, current_user: dict = Depends(get_current
 
 @router.put('/me/password', tags=["update"])
 def update_password_route(data: UpdatePasswordRequest, current_user: dict = Depends(get_current_user)):
-    resp, code = update_password_logic(current_user["uid"], data.old_password, data.new_password)
+    resp, code = update_password_logic(
+        uid=current_user["uid"],
+        new_password=data.new_password,
+        old_password=data.old_password
+    )
     return JSONResponse(content=resp, status_code=code)
 
 @router.post('/me/email/request', tags=["update"])

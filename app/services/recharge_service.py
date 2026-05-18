@@ -1,7 +1,7 @@
 from models.domain import Recharge
 from db.database import db
 from datetime import datetime
-from services.user_service import get_user_by_uid, save_user
+from services.user_service import get_user_by_uid, save_user, insert_balance_tx
 
 def create_recharge_db(data):
     user = get_user_by_uid(data['user_id'])
@@ -9,8 +9,20 @@ def create_recharge_db(data):
         return None
     recharge = Recharge(user_id=user.id, amount=data['amount'], date=datetime.utcnow())
     db.session.add(recharge)
+    db.session.flush()  # to get recharge.id before commit
+    
     user.balance += data['amount']
     db.session.add(user)
+    
+    insert_balance_tx(
+        db_session=db.session,
+        user=user,
+        tx_type='recharge',
+        amount=data['amount'],
+        ref_id=recharge.id,
+        description=f"Recharge +{data['amount']} DA"
+    )
+    
     db.session.commit()
     return recharge
 

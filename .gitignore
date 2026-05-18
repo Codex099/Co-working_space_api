@@ -1,0 +1,33 @@
+# Environnement virtuel Python
+Lib/
+Scripts/
+Include/
+pyvenv.cfg
+
+# Fichiers compilés Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Base de données SQLite locale
+*.db
+*.sqlite3
+
+# Variables d'environnement (secrets)
+.env
+
+# Clés Firebase / secrets
+*.json
+
+# Fichiers de migration temporaires
+MIGRATION_GUIDE.md
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db

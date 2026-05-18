@@ -6,7 +6,7 @@ import base64
 def get_all_bookings():
     return Booking.query.all()
 
-def create_booking_db(data):
+def create_booking_db(data, commit=True):
     if isinstance(data['date'], str):
         date_obj = datetime.strptime(data['date'], "%Y-%m-%d").date()
     else:
@@ -25,11 +25,15 @@ def create_booking_db(data):
         total_price=data.get('total_price')
     )
     db.session.add(booking)
-    db.session.commit()
+    if commit:
+        db.session.commit()
+    else:
+        db.session.flush()
     return booking
 
 def create_booking(data):
-    from services.user_service import get_user_by_uid, save_user
+    from fastapi import HTTPException
+    from services.user_service import get_user_by_uid, insert_balance_tx
     from services.location_service import get_all_rooms
     user = get_user_by_uid(data['user_id'])
     room = next((r for r in get_all_rooms() if r.id == data['room_id']), None)
@@ -40,10 +44,10 @@ def create_booking(data):
     total_price = slot_price * data['slot_count']
 
     if user.balance < total_price:
-        return {"error": "Insufficient balance"}, 400
+        raise HTTPException(status_code=402, detail="Insufficient balance")
 
     user.balance -= total_price
-    save_user(user)
+    db.session.add(user)
 
     booking = create_booking_db({
         "user_id": data['user_id'],
@@ -52,7 +56,19 @@ def create_booking(data):
         "start_time": data['start_time'],
         "slot_count": data['slot_count'],
         "total_price": total_price
-    })
+    }, commit=False)
+
+    insert_balance_tx(
+        db_session=db.session,
+        user=user,
+        tx_type='booking',
+        amount=-total_price,
+        ref_id=booking.id,
+        description=f"Réservation salle #{room.id}"
+    )
+
+    db.session.commit()
+
     return {"message": "Booking created", "booking_id": booking.id}, 201
 
 def get_available_slots_range(room_id, start_date_str, end_date_str):

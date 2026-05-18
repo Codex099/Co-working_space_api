@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --primary: #6366f1;
@@ -198,6 +199,7 @@
         .bg-users { background: #e0e7ff; color: #4338ca; }
         .bg-bookings { background: #dcfce7; color: #15803d; }
         .bg-locations { background: #fef9c3; color: #854d0e; }
+        .bg-revenue { background: #e0f2fe; color: #0369a1; }
 
         /* RESPONSIVE DESIGN */
         @media (max-width: 992px) {
@@ -288,6 +290,11 @@
                     <i class="fas fa-history"></i> Historique
                 </a>
             </li>
+            <li class="nav-item">
+                <a href="{{ url_for('transactions_page') }}" class="nav-link">
+                    <i class="fas fa-exchange-alt"></i> Transactions
+                </a>
+            </li>
         </ul>
 
         <div class="sidebar-footer">
@@ -325,28 +332,63 @@
                 <div class="stat-icon bg-users"><i class="fas fa-users"></i></div>
                 <div class="stat-info">
                     <h3>Total Utilisateurs</h3>
-                    <p>--</p>
+                    <p>{{ total_users }}</p>
                 </div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon bg-bookings"><i class="fas fa-calendar-alt"></i></div>
                 <div class="stat-info">
                     <h3>Réservations</h3>
-                    <p>--</p>
+                    <p>{{ total_bookings }}</p>
                 </div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon bg-locations"><i class="fas fa-building"></i></div>
                 <div class="stat-info">
                     <h3>Locations Actives</h3>
-                    <p>--</p>
+                    <p>{{ total_locations }}</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon bg-revenue"><i class="fas fa-wallet"></i></div>
+                <div class="stat-info">
+                    <h3>Revenu Total</h3>
+                    <p>{{ total_revenue }} DA</p>
                 </div>
             </div>
         </section>
         
-        <div class="mt-5 p-4 bg-white" style="border-radius: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-            <h4 class="font-weight-bold mb-3">Activités Récentes</h4>
-            <p class="text-muted small">Aucune activité récente pour le moment.</p>
+        <div class="row mt-4">
+            <div class="col-lg-8 mb-4">
+                <div class="bg-white p-4" style="border-radius: 24px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); min-height: 400px; display: flex; flex-direction: column;">
+                    <h4 class="font-weight-bold mb-4" style="font-size: 18px; color: var(--text-main);"><i class="fas fa-chart-line mr-2 text-primary"></i> Activité des 7 Derniers Jours</h4>
+                    <div style="flex-grow: 1; position: relative; height: 300px;">
+                        <canvas id="dashboardChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 mb-4">
+                <div class="bg-white p-4" style="border-radius: 24px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); min-height: 400px; display: flex; flex-direction: column;">
+                    <h4 class="font-weight-bold mb-4" style="font-size: 18px; color: var(--text-main);"><i class="fas fa-history mr-2 text-success"></i> Activités Récentes</h4>
+                    <div class="timeline" style="flex-grow: 1; overflow-y: auto; max-height: 300px; padding-right: 5px;">
+                        {% for event in recent_events %}
+                        <div class="d-flex align-items-start mb-3" style="border-left: 2px solid #e2e8f0; padding-left: 15px; position: relative;">
+                            <div style="position: absolute; left: -6px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: {% if event.type == 'recharge' or event.type == 'refund' %}#10b981{% else %}#ef4444{% endif %};"></div>
+                            <div style="flex-grow: 1; padding-right: 10px;">
+                                <div class="small font-weight-bold text-dark">{{ event.username }}</div>
+                                <div class="small text-muted" style="font-size: 11px; line-height: 1.2;">{{ event.description }}</div>
+                                <small class="text-muted" style="font-size: 9px;">{{ event.date.strftime('%d/%m à %H:%M') }}</small>
+                            </div>
+                            <div class="font-weight-bold {% if event.type == 'recharge' or event.type == 'refund' %}text-success{% else %}text-danger{% endif %} small text-nowrap">
+                                {% if event.type == 'recharge' or event.type == 'refund' %}+{% endif %}{{ event.amount }} DA
+                            </div>
+                        </div>
+                        {% else %}
+                        <p class="text-muted small text-center py-5">Aucune activité récente pour le moment.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
         </div>
     </main>
 
@@ -363,6 +405,107 @@
         overlay.addEventListener('click', () => {
             sidebar.classList.remove('active');
             overlay.classList.remove('active');
+        });
+
+        // Configuration de Chart.js
+        const ctx = document.getElementById('dashboardChart').getContext('2d');
+        const chartLabels = {{ chart_labels|tojson }};
+        const chartBookings = {{ chart_bookings|tojson }};
+        const chartRevenue = {{ chart_revenue|tojson }};
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: chartLabels,
+                datasets: [
+                    {
+                        label: 'Revenus (DA)',
+                        data: chartRevenue,
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                        borderWidth: 3,
+                        tension: 0.35,
+                        fill: true,
+                        yAxisID: 'y',
+                        pointBackgroundColor: '#6366f1',
+                        pointHoverRadius: 6
+                    },
+                    {
+                        label: 'Réservations',
+                        data: chartBookings,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                        borderWidth: 3,
+                        tension: 0.35,
+                        fill: true,
+                        yAxisID: 'y1',
+                        pointBackgroundColor: '#10b981',
+                        pointHoverRadius: 6
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            font: {
+                                family: 'Outfit',
+                                size: 12,
+                                weight: '600'
+                            },
+                            color: '#1e293b'
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            font: {
+                                family: 'Outfit',
+                                size: 11
+                            },
+                            color: '#64748b'
+                        }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        grid: {
+                            color: '#f1f5f9'
+                        },
+                        ticks: {
+                            font: {
+                                family: 'Outfit',
+                                size: 11
+                            },
+                            color: '#64748b'
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        grid: {
+                            drawOnChartArea: false
+                        },
+                        ticks: {
+                            font: {
+                                family: 'Outfit',
+                                size: 11
+                            },
+                            color: '#64748b',
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
         });
     </script>
 </body>

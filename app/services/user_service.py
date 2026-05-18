@@ -57,6 +57,18 @@ def get_all_users():
 def save_user(user):
     db.session.commit()
 
+def insert_balance_tx(db_session, user, tx_type, amount, ref_id, description):
+    from models.domain import BalanceTransaction
+    tx = BalanceTransaction(
+        user_id=user.id,
+        type=tx_type,
+        amount=amount,
+        balance_after=user.balance,
+        ref_id=ref_id,
+        description=description
+    )
+    db_session.add(tx)
+
 def delete_user(uid: str):
     user = get_user_by_uid(uid)
     if not user:
@@ -147,8 +159,8 @@ def local_login(email: str, password: str):
     if not user:
         return {"error": "Email ou mot de passe incorrect"}, 401
 
-    if user.auth_provider != "local":
-        return {"error": f"Ce compte utilise {user.auth_provider}. Connectez-vous via Google."}, 400
+    if user.auth_provider != "local" and not user.hashed_password:
+        return {"error": f"Ce compte utilise {user.auth_provider}. Connectez-vous via Google/Firebase."}, 400
 
     if not user.hashed_password or not verify_password(password, user.hashed_password):
         return {"error": "Email ou mot de passe incorrect"}, 401
@@ -267,6 +279,26 @@ def get_user_by_uid_logic(uid: str):
         return {"error": "Utilisateur introuvable"}, 404
     return _user_to_dict(user), 200
 
+def get_balance_history_logic(uid: str):
+    from models.domain import BalanceTransaction
+    user = get_user_by_uid(uid)
+    if not user:
+        return {"error": "Utilisateur introuvable"}, 404
+    
+    transactions = BalanceTransaction.query.filter_by(user_id=uid).order_by(BalanceTransaction.created_at.desc()).all()
+    result = []
+    for tx in transactions:
+        result.append({
+            "id": tx.id,
+            "type": tx.type,
+            "amount": tx.amount,
+            "balance_after": tx.balance_after,
+            "ref_id": tx.ref_id,
+            "description": tx.description,
+            "created_at": tx.created_at.isoformat() if tx.created_at else None
+        })
+    return result, 200
+
 def update_user_by_uid(uid: str, data: dict):
     user = get_user_by_uid(uid)
     if not user:
@@ -276,12 +308,15 @@ def update_user_by_uid(uid: str, data: dict):
     save_user(user)
     return {"message": "Profil mis à jour"}, 200
 
-def update_password_logic(uid: str, old_password: str, new_password: str):
+def update_password_logic(uid: str,new_password: str, old_password: str = None ):
     user = get_user_by_uid(uid)
     if not user:
         return {"error": "Utilisateur introuvable"}, 404
-    if not user.hashed_password or not verify_password(old_password, user.hashed_password):
-        return {"error": "Ancien mot de passe incorrect"}, 401
+    
+    # Si c'est un compte local (pas Firebase), la vérification de l'ancien mot de passe est obligatoire
+    if user.auth_provider != "firebase":
+        if not old_password or not user.hashed_password or not verify_password(old_password, user.hashed_password):
+            return {"error": "Ancien mot de passe incorrect"}, 401
     
     user.hashed_password = hash_password(new_password)
     save_user(user)

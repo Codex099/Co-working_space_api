@@ -77,7 +77,7 @@ class UpdateUserRequest(BaseModel):
     # email et phone retirés car gérés par des routes dédiées sécurisées
 
 class UpdatePasswordRequest(BaseModel):
-    old_password: str
+    old_password: Optional[str] = None
     new_password: str
 
 class UpdateEmailRequest(BaseModel):

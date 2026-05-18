@@ -4,6 +4,9 @@ from fastapi.templating import Jinja2Templates
 from typing import Optional
 import base64
 import os
+from datetime import datetime, timedelta
+from sqlalchemy import func
+from db.database import db
 
 from services.user_service import (
     get_all_users, get_user_by_email, get_user_by_uid as get_user_by_id, 
@@ -73,7 +76,91 @@ def logout():
 
 @admin_bp.get('/', response_class=HTMLResponse)
 def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie)):
-    return templates.TemplateResponse(request, 'home.html', {"request": request, "admin_user": admin_user})
+    from models.domain import User, Booking, Location, Recharge, BalanceTransaction
+    
+    # 1. Calcul des statistiques dynamiques
+    if admin_user.role == 'space_manager':
+        my_locations = [loc for loc in get_all_locations() if loc.manager_id == admin_user.id]
+        my_location_ids = [loc.id for loc in my_locations]
+        my_rooms = [room for room in get_all_rooms() if room.location_id in my_location_ids]
+        my_room_ids = [room.id for room in my_rooms]
+        my_user_ids = {b.user_id for b in get_all_bookings() if b.room_id in my_room_ids}
+        
+        total_users = len(my_user_ids)
+        total_bookings = Booking.query.filter(Booking.room_id.in_(my_room_ids)).count() if my_room_ids else 0
+        total_locations = len(my_locations)
+        # Revenue for manager = sum of total_price of bookings in their rooms
+        total_revenue = db.session.query(func.sum(Booking.total_price)).filter(Booking.room_id.in_(my_room_ids)).scalar() or 0.0 if my_room_ids else 0.0
+    else:
+        total_users = User.query.count()
+        total_bookings = Booking.query.count()
+        total_locations = Location.query.count()
+        # Revenue for global admin = total of recharges
+        total_revenue = db.session.query(func.sum(Recharge.amount)).scalar() or 0.0
+
+    # 2. Données sur 7 jours pour Chart.js
+    today = datetime.utcnow().date()
+    days = [today - timedelta(days=i) for i in range(6, -1, -1)]
+    chart_labels = [d.strftime("%d/%m") for d in days]
+    chart_bookings = []
+    chart_revenue = []
+
+    if admin_user.role == 'space_manager':
+        for day in days:
+            bk_count = Booking.query.filter(Booking.date == day, Booking.room_id.in_(my_room_ids)).count() if my_room_ids else 0
+            rev_sum = db.session.query(func.sum(Booking.total_price)).filter(
+                Booking.date == day,
+                Booking.room_id.in_(my_room_ids)
+            ).scalar() or 0.0 if my_room_ids else 0.0
+            chart_bookings.append(bk_count)
+            chart_revenue.append(rev_sum)
+    else:
+        for day in days:
+            bk_count = Booking.query.filter(Booking.date == day).count()
+            start_dt = datetime.combine(day, datetime.min.time())
+            end_dt = datetime.combine(day, datetime.max.time())
+            rev_sum = db.session.query(func.sum(Recharge.amount)).filter(
+                Recharge.date >= start_dt,
+                Recharge.date <= end_dt
+            ).scalar() or 0.0
+            chart_bookings.append(bk_count)
+            chart_revenue.append(rev_sum)
+
+    # 3. Activités récentes
+    recent_events = []
+    if admin_user.role == 'admin':
+        txs = BalanceTransaction.query.order_by(BalanceTransaction.created_at.desc()).limit(5).all()
+        for tx in txs:
+            recent_events.append({
+                'username': tx.user.username if tx.user else "Inconnu",
+                'type': tx.type,
+                'amount': tx.amount,
+                'description': tx.description or "",
+                'date': tx.created_at
+            })
+    else:
+        bks = Booking.query.filter(Booking.room_id.in_(my_room_ids)).order_by(Booking.id.desc()).limit(5).all() if my_room_ids else []
+        for bk in bks:
+            recent_events.append({
+                'username': bk.user.username if bk.user else "Inconnu",
+                'type': 'booking',
+                'amount': -bk.total_price if bk.total_price else 0.0,
+                'description': f"Réservation salle : {bk.room.name if bk.room else bk.room_id}",
+                'date': datetime.combine(bk.date, bk.start_time)
+            })
+
+    return templates.TemplateResponse(request, 'home.html', {
+        "request": request,
+        "admin_user": admin_user,
+        "total_users": total_users,
+        "total_bookings": total_bookings,
+        "total_locations": total_locations,
+        "total_revenue": total_revenue,
+        "chart_labels": chart_labels,
+        "chart_bookings": chart_bookings,
+        "chart_revenue": chart_revenue,
+        "recent_events": recent_events
+    })
 
 @admin_bp.get('/users', response_class=HTMLResponse)
 def users_page(request: Request, search_email: Optional[str] = None, error: Optional[str] = None, admin_user = Depends(get_admin_user_from_cookie)):
@@ -289,8 +376,15 @@ def user_detail(request: Request, user_uid: str, admin_user = Depends(get_admin_
             return HTMLResponse("Accès refusé", status_code=403)
             
     balance = get_user_balance(user_uid)
-    recharges = get_user_recharges(user_uid)
-    return templates.TemplateResponse(request, 'user_detail.html', {"request": request, "user": user, "balance": balance, "recharges": recharges, "admin_user": admin_user})
+    from models.domain import BalanceTransaction
+    transactions = BalanceTransaction.query.filter_by(user_id=user_uid).order_by(BalanceTransaction.created_at.desc()).all()
+    return templates.TemplateResponse(request, 'user_detail.html', {
+        "request": request, 
+        "user": user, 
+        "balance": balance, 
+        "transactions": transactions, 
+        "admin_user": admin_user
+    })
 
 @admin_bp.get('/locations/{location_id}/rooms', response_class=HTMLResponse)
 def location_rooms(request: Request, location_id: int, admin_user = Depends(get_admin_user_from_cookie)):
@@ -332,6 +426,18 @@ def recharges_page(request: Request, admin_user = Depends(get_admin_user_from_co
     # Trier par date décroissante pour voir les plus récentes en premier
     recharges = sorted(recharges, key=lambda r: r.date, reverse=True)
     return templates.TemplateResponse(request, 'recharges.html', {"request": request, "recharges": recharges, "admin_user": admin_user})
+
+@admin_bp.get('/transactions', response_class=HTMLResponse)
+def transactions_page(request: Request, admin_user = Depends(get_admin_user_from_cookie)):
+    from models.domain import BalanceTransaction
+    if admin_user.role == 'space_manager':
+        my_locations = [loc.id for loc in get_all_locations() if loc.manager_id == admin_user.id]
+        my_rooms = [room.id for room in get_all_rooms() if room.location_id in my_locations]
+        my_user_ids = {b.user_id for b in get_all_bookings() if b.room_id in my_rooms}
+        transactions = BalanceTransaction.query.filter(BalanceTransaction.user_id.in_(my_user_ids)).order_by(BalanceTransaction.created_at.desc()).all() if my_user_ids else []
+    else:
+        transactions = BalanceTransaction.query.order_by(BalanceTransaction.created_at.desc()).all()
+    return templates.TemplateResponse(request, 'transactions.html', {"request": request, "transactions": transactions, "admin_user": admin_user})
 
 @admin_bp.get('/profile', response_class=HTMLResponse)
 def admin_profile(request: Request, admin_user = Depends(get_admin_user_from_cookie)):

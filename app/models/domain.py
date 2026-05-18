@@ -15,7 +15,7 @@ import uuid
 class User(Base):
     __tablename__ = 'users'
 
-    # Clé primaire UUID propre (indépendant de Firebase)
+    
     id               = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
 
     email            = Column(String(120), unique=True, nullable=False)
@@ -33,6 +33,19 @@ class User(Base):
 
     bookings         = relationship('Booking', backref='user', cascade="all, delete-orphan")
     recharges        = relationship('Recharge', backref='user', cascade="all, delete-orphan")
+    balance_transactions = relationship('BalanceTransaction', backref='user', cascade="all, delete-orphan")
+
+
+class BalanceTransaction(Base):
+    __tablename__ = 'balance_transactions'
+    id            = Column(Integer, primary_key=True, autoincrement=True)
+    user_id       = Column(String(36), ForeignKey('users.id'), nullable=False, index=True)
+    type          = Column(String(20), nullable=False)
+    amount        = Column(Float, nullable=False)
+    balance_after = Column(Float, nullable=False)
+    ref_id        = Column(Integer, nullable=True)
+    description   = Column(String(255), nullable=True)
+    created_at    = Column(DateTime, default=datetime.utcnow)
 
 
 class Location(Base):
