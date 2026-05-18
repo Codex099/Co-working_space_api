@@ -7,6 +7,7 @@ import os
 from datetime import datetime, timedelta
 from sqlalchemy import func
 from db.database import db
+from models.domain import BalanceTransaction
 
 from services.user_service import (
     get_all_users, get_user_by_email, get_user_by_uid as get_user_by_id, 
@@ -76,81 +77,143 @@ def logout():
 
 @admin_bp.get('/', response_class=HTMLResponse)
 def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie)):
-    from models.domain import User, Booking, Location, Recharge, BalanceTransaction
-    
-    # 1. Calcul des statistiques dynamiques
-    if admin_user.role == 'space_manager':
-        my_locations = [loc for loc in get_all_locations() if loc.manager_id == admin_user.id]
-        my_location_ids = [loc.id for loc in my_locations]
-        my_rooms = [room for room in get_all_rooms() if room.location_id in my_location_ids]
-        my_room_ids = [room.id for room in my_rooms]
-        my_user_ids = {b.user_id for b in get_all_bookings() if b.room_id in my_room_ids}
-        
-        total_users = len(my_user_ids)
-        total_bookings = Booking.query.filter(Booking.room_id.in_(my_room_ids)).count() if my_room_ids else 0
-        total_locations = len(my_locations)
-        # Revenue for manager = sum of total_price of bookings in their rooms
-        total_revenue = db.session.query(func.sum(Booking.total_price)).filter(Booking.room_id.in_(my_room_ids)).scalar() or 0.0 if my_room_ids else 0.0
-    else:
+    from models.domain import User, Booking, Location, Room, Recharge, BalanceTransaction
+
+    # Determine date range for the last 7 days (including today)
+    today = datetime.utcnow().date()
+    seven_days_ago = today - timedelta(days=6)
+
+    # Prepare labels for Chart.js
+    chart_labels = []
+    current_date = seven_days_ago
+    while current_date <= today:
+        chart_labels.append(current_date.strftime('%d/%m'))
+        current_date += timedelta(days=1)
+
+    if admin_user.role == 'admin':
+        # Admin: Global statistics
         total_users = User.query.count()
         total_bookings = Booking.query.count()
         total_locations = Location.query.count()
-        # Revenue for global admin = total of recharges
-        total_revenue = db.session.query(func.sum(Recharge.amount)).scalar() or 0.0
+        
+        # Total revenue is the sum of recharge amounts (credits added to system)
+        total_revenue_val = db.session.query(func.sum(Recharge.amount)).scalar() or 0.0
+        total_revenue = round(total_revenue_val, 2)
 
-    # 2. Données sur 7 jours pour Chart.js
-    today = datetime.utcnow().date()
-    days = [today - timedelta(days=i) for i in range(6, -1, -1)]
-    chart_labels = [d.strftime("%d/%m") for d in days]
-    chart_bookings = []
-    chart_revenue = []
+        # 7-day bookings and revenue data
+        # Bookings per day
+        bookings_by_day = db.session.query(
+            Booking.date,
+            func.count(Booking.id)
+        ).filter(Booking.date >= seven_days_ago).group_by(Booking.date).all()
+        bookings_map = {b[0]: b[1] for b in bookings_by_day}
 
-    if admin_user.role == 'space_manager':
-        for day in days:
-            bk_count = Booking.query.filter(Booking.date == day, Booking.room_id.in_(my_room_ids)).count() if my_room_ids else 0
-            rev_sum = db.session.query(func.sum(Booking.total_price)).filter(
-                Booking.date == day,
-                Booking.room_id.in_(my_room_ids)
-            ).scalar() or 0.0 if my_room_ids else 0.0
-            chart_bookings.append(bk_count)
-            chart_revenue.append(rev_sum)
-    else:
-        for day in days:
-            bk_count = Booking.query.filter(Booking.date == day).count()
-            start_dt = datetime.combine(day, datetime.min.time())
-            end_dt = datetime.combine(day, datetime.max.time())
-            rev_sum = db.session.query(func.sum(Recharge.amount)).filter(
-                Recharge.date >= start_dt,
-                Recharge.date <= end_dt
-            ).scalar() or 0.0
-            chart_bookings.append(bk_count)
-            chart_revenue.append(rev_sum)
+        # Revenue (recharges) per day
+        recharges_by_day = db.session.query(
+            func.date(Recharge.date).label('day'),
+            func.sum(Recharge.amount)
+        ).filter(Recharge.date >= datetime.combine(seven_days_ago, datetime.min.time())).group_by('day').all()
+        
+        revenue_map = {}
+        for r in recharges_by_day:
+            day_key = r[0]
+            if isinstance(day_key, str):
+                try:
+                    day_key = datetime.strptime(day_key, '%Y-%m-%d').date()
+                except ValueError:
+                    pass
+            revenue_map[day_key] = float(r[1] or 0.0)
 
-    # 3. Activités récentes
-    recent_events = []
-    if admin_user.role == 'admin':
-        txs = BalanceTransaction.query.order_by(BalanceTransaction.created_at.desc()).limit(5).all()
-        for tx in txs:
+        # Compile data for Chart.js
+        chart_bookings = []
+        chart_revenue = []
+        current_date = seven_days_ago
+        while current_date <= today:
+            chart_bookings.append(bookings_map.get(current_date, 0))
+            rev_val = revenue_map.get(current_date) or revenue_map.get(current_date.strftime('%Y-%m-%d')) or 0.0
+            chart_revenue.append(round(rev_val, 2))
+            current_date += timedelta(days=1)
+
+        # Recent activities (last 5 balance transactions)
+        recent_txs = BalanceTransaction.query.order_by(BalanceTransaction.created_at.desc()).limit(5).all()
+        recent_events = []
+        for tx in recent_txs:
             recent_events.append({
-                'username': tx.user.username if tx.user else "Inconnu",
-                'type': tx.type,
-                'amount': tx.amount,
-                'description': tx.description or "",
-                'date': tx.created_at
+                'username': tx.user.username if tx.user else 'Inconnu',
+                'description': tx.description or '',
+                'date': tx.created_at,
+                'amount': abs(tx.amount),
+                'type': tx.type
             })
+
     else:
-        bks = Booking.query.filter(Booking.room_id.in_(my_room_ids)).order_by(Booking.id.desc()).limit(5).all() if my_room_ids else []
-        for bk in bks:
-            recent_events.append({
-                'username': bk.user.username if bk.user else "Inconnu",
-                'type': 'booking',
-                'amount': -bk.total_price if bk.total_price else 0.0,
-                'description': f"Réservation salle : {bk.room.name if bk.room else bk.room_id}",
-                'date': datetime.combine(bk.date, bk.start_time)
-            })
+        # Space Manager: Specific to managed locations
+        # Get manager's locations
+        my_locations = Location.query.filter_by(manager_id=admin_user.id).all()
+        my_location_ids = [loc.id for loc in my_locations]
+        total_locations = len(my_location_ids)
+
+        # Get rooms in these locations
+        my_rooms = Room.query.filter(Room.location_id.in_(my_location_ids)).all() if my_location_ids else []
+        my_room_ids = [room.id for room in my_rooms]
+
+        # Get bookings for these rooms
+        if my_room_ids:
+            my_bookings = Booking.query.filter(Booking.room_id.in_(my_room_ids)).all()
+            total_bookings = len(my_bookings)
+            
+            # Sum of total price of bookings on manager's rooms
+            total_revenue_val = sum(b.total_price or 0.0 for b in my_bookings)
+            total_revenue = round(total_revenue_val, 2)
+
+            # Unique users who booked at least once
+            my_user_ids = {b.user_id for b in my_bookings}
+            total_users = len(my_user_ids)
+
+            # Bookings per day in the last 7 days
+            bookings_by_day = db.session.query(
+                Booking.date,
+                func.count(Booking.id)
+            ).filter(Booking.date >= seven_days_ago, Booking.room_id.in_(my_room_ids)).group_by(Booking.date).all()
+            bookings_map = {b[0]: b[1] for b in bookings_by_day}
+
+            # Revenue (sum of booking total_price) per day in the last 7 days
+            revenue_by_day = db.session.query(
+                Booking.date,
+                func.sum(Booking.total_price)
+            ).filter(Booking.date >= seven_days_ago, Booking.room_id.in_(my_room_ids)).group_by(Booking.date).all()
+            revenue_map = {r[0]: float(r[1] or 0.0) for r in revenue_by_day}
+
+            # Compile Chart.js datasets
+            chart_bookings = []
+            chart_revenue = []
+            current_date = seven_days_ago
+            while current_date <= today:
+                chart_bookings.append(bookings_map.get(current_date, 0))
+                chart_revenue.append(round(revenue_map.get(current_date, 0.0), 2))
+                current_date += timedelta(days=1)
+
+            # Recent activities for Space Manager (only bookings of their rooms)
+            recent_bookings = Booking.query.filter(Booking.room_id.in_(my_room_ids)).order_by(Booking.id.desc()).limit(5).all()
+            recent_events = []
+            for b in recent_bookings:
+                recent_events.append({
+                    'username': b.user.username if b.user else 'Inconnu',
+                    'description': f"Réservation salle {b.room.name if b.room else ''}",
+                    'date': datetime.combine(b.date, datetime.min.time()),
+                    'amount': b.total_price or 0.0,
+                    'type': 'booking'
+                })
+        else:
+            total_bookings = 0
+            total_revenue = 0.0
+            total_users = 0
+            chart_bookings = [0] * 7
+            chart_revenue = [0.0] * 7
+            recent_events = []
 
     return templates.TemplateResponse(request, 'home.html', {
-        "request": request,
+        "request": request, 
         "admin_user": admin_user,
         "total_users": total_users,
         "total_bookings": total_bookings,
@@ -376,15 +439,8 @@ def user_detail(request: Request, user_uid: str, admin_user = Depends(get_admin_
             return HTMLResponse("Accès refusé", status_code=403)
             
     balance = get_user_balance(user_uid)
-    from models.domain import BalanceTransaction
     transactions = BalanceTransaction.query.filter_by(user_id=user_uid).order_by(BalanceTransaction.created_at.desc()).all()
-    return templates.TemplateResponse(request, 'user_detail.html', {
-        "request": request, 
-        "user": user, 
-        "balance": balance, 
-        "transactions": transactions, 
-        "admin_user": admin_user
-    })
+    return templates.TemplateResponse(request, 'user_detail.html', {"request": request, "user": user, "balance": balance, "transactions": transactions, "admin_user": admin_user})
 
 @admin_bp.get('/locations/{location_id}/rooms', response_class=HTMLResponse)
 def location_rooms(request: Request, location_id: int, admin_user = Depends(get_admin_user_from_cookie)):
@@ -429,14 +485,27 @@ def recharges_page(request: Request, admin_user = Depends(get_admin_user_from_co
 
 @admin_bp.get('/transactions', response_class=HTMLResponse)
 def transactions_page(request: Request, admin_user = Depends(get_admin_user_from_cookie)):
-    from models.domain import BalanceTransaction
+    from models.domain import BalanceTransaction, Location, Room, Booking
+    
     if admin_user.role == 'space_manager':
-        my_locations = [loc.id for loc in get_all_locations() if loc.manager_id == admin_user.id]
-        my_rooms = [room.id for room in get_all_rooms() if room.location_id in my_locations]
-        my_user_ids = {b.user_id for b in get_all_bookings() if b.room_id in my_rooms}
-        transactions = BalanceTransaction.query.filter(BalanceTransaction.user_id.in_(my_user_ids)).order_by(BalanceTransaction.created_at.desc()).all() if my_user_ids else []
+        # Space Manager sees only transactions of users who booked their locations
+        my_locations = Location.query.filter_by(manager_id=admin_user.id).all()
+        my_location_ids = [loc.id for loc in my_locations]
+        
+        my_rooms = Room.query.filter(Room.location_id.in_(my_location_ids)).all() if my_location_ids else []
+        my_room_ids = [room.id for room in my_rooms]
+        
+        if my_room_ids:
+            my_user_ids = {b.user_id for b in Booking.query.filter(Booking.room_id.in_(my_room_ids)).all()}
+            if my_user_ids:
+                transactions = BalanceTransaction.query.filter(BalanceTransaction.user_id.in_(list(my_user_ids))).order_by(BalanceTransaction.created_at.desc()).all()
+            else:
+                transactions = []
+        else:
+            transactions = []
     else:
         transactions = BalanceTransaction.query.order_by(BalanceTransaction.created_at.desc()).all()
+        
     return templates.TemplateResponse(request, 'transactions.html', {"request": request, "transactions": transactions, "admin_user": admin_user})
 
 @admin_bp.get('/profile', response_class=HTMLResponse)
