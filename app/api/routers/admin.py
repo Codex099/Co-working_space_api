@@ -101,12 +101,21 @@ def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie
         total_revenue = round(total_revenue_val, 2)
 
         # 7-day bookings and revenue data
-        # Bookings per day
+        # Bookings per day (Booking.start_time is now a DateTime)
         bookings_by_day = db.session.query(
-            Booking.date,
+            func.date(Booking.start_time).label('day'),
             func.count(Booking.id)
-        ).filter(Booking.date >= seven_days_ago).group_by(Booking.date).all()
-        bookings_map = {b[0]: b[1] for b in bookings_by_day}
+        ).filter(Booking.start_time >= datetime.combine(seven_days_ago, datetime.min.time())).group_by('day').all()
+        bookings_map = {}
+        for b in bookings_by_day:
+            day_key = b[0]
+            if isinstance(day_key, str):
+                try:
+                    from datetime import date as dt_date
+                    day_key = dt_date.fromisoformat(day_key)
+                except ValueError:
+                    pass
+            bookings_map[day_key] = b[1]
 
         # Revenue (recharges) per day
         recharges_by_day = db.session.query(
@@ -140,7 +149,7 @@ def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie
         for tx in recent_txs:
             recent_events.append({
                 'username': tx.user.username if tx.user else 'Inconnu',
-                'description': tx.description or '',
+                'description': tx.description,
                 'date': tx.created_at,
                 'amount': abs(tx.amount),
                 'type': tx.type
@@ -172,17 +181,35 @@ def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie
 
             # Bookings per day in the last 7 days
             bookings_by_day = db.session.query(
-                Booking.date,
+                func.date(Booking.start_time).label('day'),
                 func.count(Booking.id)
-            ).filter(Booking.date >= seven_days_ago, Booking.room_id.in_(my_room_ids)).group_by(Booking.date).all()
-            bookings_map = {b[0]: b[1] for b in bookings_by_day}
+            ).filter(Booking.start_time >= datetime.combine(seven_days_ago, datetime.min.time()), Booking.room_id.in_(my_room_ids)).group_by('day').all()
+            bookings_map = {}
+            for b in bookings_by_day:
+                day_key = b[0]
+                if isinstance(day_key, str):
+                    try:
+                        from datetime import date as dt_date
+                        day_key = dt_date.fromisoformat(day_key)
+                    except ValueError:
+                        pass
+                bookings_map[day_key] = b[1]
 
             # Revenue (sum of booking total_price) per day in the last 7 days
             revenue_by_day = db.session.query(
-                Booking.date,
+                func.date(Booking.start_time).label('day'),
                 func.sum(Booking.total_price)
-            ).filter(Booking.date >= seven_days_ago, Booking.room_id.in_(my_room_ids)).group_by(Booking.date).all()
-            revenue_map = {r[0]: float(r[1] or 0.0) for r in revenue_by_day}
+            ).filter(Booking.start_time >= datetime.combine(seven_days_ago, datetime.min.time()), Booking.room_id.in_(my_room_ids)).group_by('day').all()
+            revenue_map = {}
+            for r in revenue_by_day:
+                day_key = r[0]
+                if isinstance(day_key, str):
+                    try:
+                        from datetime import date as dt_date
+                        day_key = dt_date.fromisoformat(day_key)
+                    except ValueError:
+                        pass
+                revenue_map[day_key] = float(r[1] or 0.0)
 
             # Compile Chart.js datasets
             chart_bookings = []
@@ -200,7 +227,7 @@ def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie
                 recent_events.append({
                     'username': b.user.username if b.user else 'Inconnu',
                     'description': f"Réservation salle {b.room.name if b.room else ''}",
-                    'date': datetime.combine(b.date, datetime.min.time()),
+                    'date': b.start_time,
                     'amount': b.total_price or 0.0,
                     'type': 'booking'
                 })
@@ -261,7 +288,11 @@ def locations_page(request: Request, admin_user = Depends(get_admin_user_from_co
     return templates.TemplateResponse(request, 'locations.html', {"request": request, "locations": locations, "admin_user": admin_user, "managers": all_managers})
 
 @admin_bp.get('/rooms', response_class=HTMLResponse)
-def rooms_page(request: Request, admin_user = Depends(get_admin_user_from_cookie)):
+def rooms_page(request: Request, 
+               search_query: Optional[str] = None, 
+               filter_location_id: Optional[str] = None,
+               min_capacity: Optional[str] = None,
+               admin_user = Depends(get_admin_user_from_cookie)):
     rooms = get_all_rooms()
     locations = get_all_locations()
     
@@ -269,6 +300,16 @@ def rooms_page(request: Request, admin_user = Depends(get_admin_user_from_cookie
         locations = [loc for loc in locations if loc.manager_id == admin_user.id]
         my_location_ids = [loc.id for loc in locations]
         rooms = [r for r in rooms if r.location_id in my_location_ids]
+        
+    if search_query:
+        search_query_lower = search_query.lower()
+        rooms = [r for r in rooms if search_query_lower in r.name.lower()]
+        
+    if filter_location_id and filter_location_id.isdigit():
+        rooms = [r for r in rooms if r.location_id == int(filter_location_id)]
+        
+    if min_capacity and min_capacity.isdigit():
+        rooms = [r for r in rooms if r.capacity >= int(min_capacity)]
         
     return templates.TemplateResponse(request, 'rooms.html', {"request": request, "rooms": rooms, "locations": locations, "admin_user": admin_user})
 
@@ -361,12 +402,23 @@ async def create_room_admin(
     request: Request,
     name: str = Form(...),
     capacity: int = Form(...),
-    slot_price: float = Form(...),
-    slot_duration: int = Form(...),
     location_id: int = Form(...),
+    type_hourly: Optional[str] = Form(None),
+    price_hourly: Optional[float] = Form(None),
+    type_half_day: Optional[str] = Form(None),
+    price_half_day: Optional[float] = Form(None),
+    type_full_day: Optional[str] = Form(None),
+    price_full_day: Optional[float] = Form(None),
+    type_weekly: Optional[str] = Form(None),
+    price_weekly: Optional[float] = Form(None),
+    custom_type_name: Optional[str] = Form(None),
+    custom_type_duration: Optional[int] = Form(None),
+    custom_type_price: Optional[float] = Form(None),
     image: UploadFile = File(None),
     admin_user = Depends(get_admin_user_from_cookie)
 ):
+    from services.booking_service import create_booking_type
+    
     # Verify permission
     if admin_user.role == 'space_manager':
         loc = next((l for l in get_all_locations() if l.id == location_id), None)
@@ -374,14 +426,28 @@ async def create_room_admin(
             return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
             
     image_data = await image.read() if image and image.filename else None
-    create_room({
+    
+    # 1. Créer la salle
+    new_room = create_room({
         'name': name,
         'capacity': capacity,
-        'slot_price': slot_price,
-        'slot_duration': slot_duration,
         'location_id': location_id,
         'image_data': image_data
     })
+    
+    # 2. Créer les types de réservation sélectionnés
+    if type_hourly == 'on' and price_hourly is not None:
+        create_booking_type({'room_id': new_room.id, 'name': '1 Hour', 'duration_minutes': 60, 'price': price_hourly, 'is_active': True})
+    if type_half_day == 'on' and price_half_day is not None:
+        create_booking_type({'room_id': new_room.id, 'name': 'Half-day', 'duration_minutes': 300, 'price': price_half_day, 'is_active': True})
+    if type_full_day == 'on' and price_full_day is not None:
+        create_booking_type({'room_id': new_room.id, 'name': 'Day', 'duration_minutes': 720, 'price': price_full_day, 'is_active': True})
+    if type_weekly == 'on' and price_weekly is not None:
+        create_booking_type({'room_id': new_room.id, 'name': 'Week', 'duration_minutes': 3600, 'price': price_weekly, 'is_active': True})
+        
+    if custom_type_name and custom_type_duration and custom_type_price is not None:
+        create_booking_type({'room_id': new_room.id, 'name': custom_type_name, 'duration_minutes': custom_type_duration, 'price': custom_type_price, 'is_active': True})
+    
     return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
 
 @admin_bp.post('/rooms/delete/{room_id}')
@@ -396,6 +462,61 @@ def delete_room_admin(request: Request, room_id: int, admin_user = Depends(get_a
                 return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
                 
     delete_room(room_id)
+    return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
+
+
+@admin_bp.post('/rooms/{room_id}/booking-types')
+async def create_booking_type_admin(
+    request: Request,
+    room_id: int,
+    type_hourly: Optional[str] = Form(None),
+    price_hourly: Optional[float] = Form(None),
+    type_half_day: Optional[str] = Form(None),
+    price_half_day: Optional[float] = Form(None),
+    type_full_day: Optional[str] = Form(None),
+    price_full_day: Optional[float] = Form(None),
+    type_weekly: Optional[str] = Form(None),
+    price_weekly: Optional[float] = Form(None),
+    custom_type_name: Optional[str] = Form(None),
+    custom_type_duration: Optional[int] = Form(None),
+    custom_type_price: Optional[float] = Form(None),
+    admin_user = Depends(get_admin_user_from_cookie)
+):
+    """Ajouter des types de réservation à une salle (formulaire admin)."""
+    from services.booking_service import create_booking_type
+    # Vérifier permission space_manager
+    if admin_user.role == 'space_manager':
+        rooms = get_all_rooms()
+        room = next((r for r in rooms if r.id == room_id), None)
+        if room:
+            loc = next((l for l in get_all_locations() if l.id == room.location_id), None)
+            if not loc or loc.manager_id != admin_user.id:
+                return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
+
+    if type_hourly == 'on' and price_hourly is not None:
+        create_booking_type({'room_id': room_id, 'name': '1 Heure', 'duration_minutes': 60, 'price': price_hourly, 'is_active': True})
+    if type_half_day == 'on' and price_half_day is not None:
+        create_booking_type({'room_id': room_id, 'name': 'Demi-journée', 'duration_minutes': 300, 'price': price_half_day, 'is_active': True})
+    if type_full_day == 'on' and price_full_day is not None:
+        create_booking_type({'room_id': room_id, 'name': 'Journée', 'duration_minutes': 720, 'price': price_full_day, 'is_active': True})
+    if type_weekly == 'on' and price_weekly is not None:
+        create_booking_type({'room_id': room_id, 'name': 'Semaine', 'duration_minutes': 3600, 'price': price_weekly, 'is_active': True})
+        
+    if custom_type_name and custom_type_duration and custom_type_price is not None:
+        create_booking_type({'room_id': room_id, 'name': custom_type_name, 'duration_minutes': custom_type_duration, 'price': custom_type_price, 'is_active': True})
+    return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
+
+
+@admin_bp.post('/rooms/{room_id}/booking-types/{type_id}/delete')
+def delete_booking_type_admin(
+    request: Request,
+    room_id: int,
+    type_id: int,
+    admin_user = Depends(get_admin_user_from_cookie)
+):
+    """Supprimer un type de réservation (formulaire admin)."""
+    from services.booking_service import delete_booking_type
+    delete_booking_type(type_id)
     return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
 
 @admin_bp.post('/users/delete/{user_uid}')

@@ -1,4 +1,4 @@
-from models.domain import Location, Room
+from models.domain import Location, Room, BookingType
 from db.database import db
 import base64
 
@@ -31,8 +31,6 @@ def create_room(data):
     room = Room(
         name=data['name'],
         capacity=data['capacity'],
-        slot_price=data['slot_price'],
-        slot_duration=data['slot_duration'],
         location_id=data['location_id'],
         image_data=data.get('image_data')
     )
@@ -73,12 +71,23 @@ def get_rooms_by_location_name(location_name):
         image_base64 = None
         if getattr(room, "image_data", None):
             image_base64 = base64.b64encode(room.image_data).decode('utf-8')
+
+        booking_types = [
+            {
+                "id": bt.id,
+                "name": bt.name,
+                "duration_minutes": bt.duration_minutes,
+                "price": bt.price,
+                "is_active": bt.is_active
+            }
+            for bt in BookingType.query.filter_by(room_id=room.id, is_active=True).all()
+        ]
+
         result.append({
             "id": room.id,
             "name": room.name,
             "capacity": room.capacity,
-            "slot_price": room.slot_price,
-            "slot_duration": room.slot_duration,
+            "booking_types": booking_types,
             "image_base64": image_base64
         })
     return result, 200

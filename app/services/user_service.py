@@ -10,6 +10,8 @@ from services.sms_service import generate_sms_code, send_sms_code, phone_codes
 import uuid
 
 pending_email_updates: dict = {}
+reset_password_codes: dict = {}
+reset_password_tokens: dict = {}
 # ============================================================
 #  USER SERVICE — Logique métier auth locale + SMS
 #  ┌─────────────────────────────────────────────────────┐
@@ -57,15 +59,14 @@ def get_all_users():
 def save_user(user):
     db.session.commit()
 
-def insert_balance_tx(db_session, user, tx_type, amount, ref_id, description):
+def insert_balance_tx(db_session, user, tx_type, amount, ref_id):
     from models.domain import BalanceTransaction
     tx = BalanceTransaction(
         user_id=user.id,
         type=tx_type,
         amount=amount,
         balance_after=user.balance,
-        ref_id=ref_id,
-        description=description
+        ref_id=ref_id
     )
     db_session.add(tx)
 
@@ -321,6 +322,71 @@ def update_password_logic(uid: str,new_password: str, old_password: str = None )
     user.hashed_password = hash_password(new_password)
     save_user(user)
     return {"message": "Mot de passe mis à jour avec succès"}, 200
+
+def forgot_password_request_logic(email: str):
+    """
+    Génère un code de réinitialisation de mot de passe et l'envoie par email.
+    """
+    email = email.lower().strip()
+    user = get_user_by_email(email)
+    
+    if not user:
+        return {"error": "Aucun utilisateur trouvé avec cet email"}, 404
+
+    code = generate_code()
+    reset_password_codes[email] = code
+
+    # Envoyer le code par email
+    sent = send_verification_email(email, code, username=user.username)
+    if not sent:
+        return {"error": "Erreur lors de l'envoi de l'email"}, 500
+
+    return {"message": "Code de réinitialisation envoyé", "email": email}, 200
+
+def verify_reset_code_logic(email: str, code: str):
+    """
+    Vérifie le code de réinitialisation et génère un token temporaire.
+    """
+    email = email.lower().strip()
+    expected = reset_password_codes.get(email)
+
+    if not expected:
+        return {"error": "Aucun code de réinitialisation trouvé pour cet email"}, 400
+    if code != expected:
+        return {"error": "Code invalide"}, 401
+
+    # Code valide -> générer un token temporaire
+    token = str(uuid.uuid4())
+    reset_password_tokens[email] = token
+
+    # Nettoyer le code
+    del reset_password_codes[email]
+
+    return {"message": "Code vérifié avec succès", "reset_token": token}, 200
+
+def reset_password_confirm_logic(email: str, token: str, new_password: str):
+    """
+    Vérifie le token temporaire et met à jour le mot de passe.
+    """
+    email = email.lower().strip()
+    expected_token = reset_password_tokens.get(email)
+
+    if not expected_token:
+        return {"error": "Aucune autorisation de réinitialisation trouvée pour cet email"}, 400
+    if token != expected_token:
+        return {"error": "Token de réinitialisation invalide"}, 401
+
+    user = get_user_by_email(email)
+    if not user:
+        return {"error": "Utilisateur introuvable"}, 404
+
+    user.hashed_password = hash_password(new_password)
+    save_user(user)
+
+    # Nettoyer le token
+    del reset_password_tokens[email]
+
+    return {"message": "Mot de passe réinitialisé avec succès"}, 200
 
 def request_email_update_logic(uid: str, new_email: str):
     user = get_user_by_uid(uid)

@@ -64,6 +64,45 @@ async def get_current_user(res: HTTPAuthorizationCredentials = Depends(security)
     )
 
 
+security_optional = HTTPBearer(auto_error=False)
+
+async def get_current_user_optional(res: HTTPAuthorizationCredentials = Depends(security_optional)) -> dict:
+    """
+    Middleware d'authentification hybride optionnel.
+    Retourne le dict utilisateur s'il est authentifié, sinon None.
+    """
+    if not res or not res.credentials:
+        return None
+    token = res.credentials
+
+    # ── Étape 1 : Essayer Firebase (si activé) ──────────────────────────
+    if FIREBASE_ENABLED:
+        try:
+            decoded = firebase_auth.verify_id_token(token)
+            return {
+                "uid":      decoded["uid"],
+                "email":    decoded.get("email"),
+                "provider": "firebase",
+                "source":   "firebase"
+            }
+        except Exception:
+            pass
+
+    # ── Étape 2 : Essayer JWT local ─────────────────────────────────────
+    try:
+        payload = decode_access_token(token)
+        return {
+            "uid":      payload.get("sub"),
+            "email":    payload.get("email"),
+            "provider": "local",
+            "source":   "local"
+        }
+    except Exception:
+        pass
+
+    return None
+
+
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     """Dépendance pour les routes admin uniquement."""
     from services.user_service import get_user_by_uid

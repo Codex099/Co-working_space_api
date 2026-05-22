@@ -1,5 +1,5 @@
-from pydantic import BaseModel, EmailStr, field_validator
-from typing import Optional
+from pydantic import BaseModel, EmailStr, field_validator, model_validator
+from typing import Optional, List, Union
 import re
 
 # ============================================================
@@ -35,6 +35,32 @@ class LocalLoginRequest(BaseModel):
     """Connexion avec email + mot de passe."""
     email: EmailStr
     password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Demande de réinitialisation de mot de passe."""
+    email: EmailStr
+
+
+class VerifyResetCodeRequest(BaseModel):
+    """Vérification du code de réinitialisation."""
+    email: EmailStr
+    code: str
+
+
+class ResetPasswordRequest(BaseModel):
+    """Confirmation de réinitialisation de mot de passe."""
+    email: EmailStr
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v):
+        """Mot de passe : min 8 chars."""
+        if len(v) < 8:
+            raise ValueError("Le mot de passe doit faire au moins 8 caractères")
+        return v
 
 
 # ─── Vérification téléphone (SMS Brevo) ──────────────────────
@@ -102,8 +128,27 @@ class FirebaseAuthRequest(BaseModel):
 # ─── Booking ─────────────────────────────────────────────────
 
 class BookingCreate(BaseModel):
-    user_id:    str
-    room_id:    int
-    date:       str
-    start_time: str
-    slot_count: int
+    """Création d'une réservation via booking_type_id."""
+    booking_type_id: int   # FK vers booking_types (contient room_id, duration, price)
+    date:            str   # format YYYY-MM-DD
+    start_time:      str   # format HH:MM
+    end_time:        str   # format HH:MM
+
+
+# ─── Booking Types (gestion par l'admin) ─────────────────────
+
+class BookingTypeCreate(BaseModel):
+    """Création d'un type de réservation pour une salle."""
+    room_id:          int
+    name:             str          # ex: "Horaire", "Demi-journée", "Semaine"
+    duration_minutes: int          # durée en minutes (ex: 60, 300, 720)
+    price:            float        # prix en DA
+    is_active:        Optional[bool] = True
+
+
+class BookingTypeUpdate(BaseModel):
+    """Mise à jour partielle d'un type de réservation."""
+    name:             Optional[str]   = None
+    duration_minutes: Optional[int]   = None
+    price:            Optional[float] = None
+    is_active:        Optional[bool]  = None

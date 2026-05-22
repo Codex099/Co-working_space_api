@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, Time, DateTime, LargeBinary, Boolean
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, Time, DateTime, LargeBinary, Boolean, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from db.database import Base, db, db_session
@@ -44,8 +44,19 @@ class BalanceTransaction(Base):
     amount        = Column(Float, nullable=False)
     balance_after = Column(Float, nullable=False)
     ref_id        = Column(Integer, nullable=True)
-    description   = Column(String(255), nullable=True)
     created_at    = Column(DateTime, default=datetime.utcnow)
+
+    @property
+    def description(self) -> str:
+        if self.type == 'recharge':
+            return f"Recharge +{self.amount} DA"
+        elif self.type == 'booking':
+            return f"Réservation salle #{self.ref_id}"
+        elif self.type == 'refund':
+            return f"Remboursement +{self.amount} DA"
+        elif self.type == 'cancellation':
+            return f"Annulation réservation #{self.ref_id} (+{self.amount} DA remboursé)"
+        return f"Transaction {self.type}"
 
 
 class Location(Base):
@@ -62,22 +73,36 @@ class Room(Base):
     id            = Column(Integer, primary_key=True)
     name          = Column(String(100), nullable=False)
     capacity      = Column(Integer, nullable=False)
-    slot_price    = Column(Float, nullable=False)
-    slot_duration = Column(Integer, nullable=False, default=60)  # en minutes, défaut 1h
     location_id   = Column(Integer, ForeignKey('locations.id'), nullable=False)
-    bookings      = relationship('Booking', backref='room', cascade="all, delete-orphan")
     image_data    = Column(LargeBinary)
+    bookings      = relationship('Booking', backref='room', cascade="all, delete-orphan")
+    booking_types = relationship('BookingType', backref='room', cascade="all, delete-orphan")
+
+
+class BookingType(Base):
+    """Types de réservation personnalisables par salle (ex: Horaire, Demi-journée...)"""
+    __tablename__ = 'booking_types'
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    room_id          = Column(Integer, ForeignKey('rooms.id'), nullable=False)
+    name             = Column(String(100), nullable=False)   # ex: "Horaire", "Demi-journée"
+    duration_minutes = Column(Integer, nullable=False)        # durée en minutes
+    price            = Column(Float, nullable=False)          # prix en DA
+    is_active        = Column(Boolean, default=True)          # activer/désactiver
+    bookings         = relationship('Booking', backref='booking_type')
 
 
 class Booking(Base):
     __tablename__ = 'bookings'
-    id          = Column(Integer, primary_key=True)
-    user_id     = Column(String(36), ForeignKey('users.id'), nullable=False)  # FK vers users.id (UUID)
-    room_id     = Column(Integer, ForeignKey('rooms.id'), nullable=False)
-    date        = Column(Date, nullable=False)
-    start_time  = Column(Time, nullable=False)
-    slot_count  = Column(Integer, nullable=False)
-    total_price = Column(Float, nullable=True)
+    id              = Column(Integer, primary_key=True)
+    user_id         = Column(String(36), ForeignKey('users.id'), nullable=False)  # FK vers users.id (UUID)
+    room_id         = Column(Integer, ForeignKey('rooms.id'), nullable=False)
+    booking_type_id = Column(Integer, ForeignKey('booking_types.id'), nullable=False)  # FK vers booking_types
+    start_time      = Column(DateTime, nullable=False)
+    end_time        = Column(DateTime, nullable=False)
+    total_price     = Column(Float, nullable=True)
+    status          = Column(String(20), nullable=False, default='confirmed')  # 'confirmed' | 'cancelled'
+    cancelled_at    = Column(DateTime, nullable=True)
+    refund_amount   = Column(Float, nullable=True)
 
 
 class Recharge(Base):

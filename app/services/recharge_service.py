@@ -19,8 +19,7 @@ def create_recharge_db(data):
         user=user,
         tx_type='recharge',
         amount=data['amount'],
-        ref_id=recharge.id,
-        description=f"Recharge +{data['amount']} DA"
+        ref_id=recharge.id
     )
     
     db.session.commit()

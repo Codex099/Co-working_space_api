@@ -1,354 +1,113 @@
-<!DOCTYPE html>
-<html lang="fr">
+{% extends "base.html" %}
+{% set active_page = 'rooms' %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestion des Salles | Admin</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        :root {
-            --primary: #6366f1;
-            --primary-hover: #4f46e5;
-            --bg-body: #f8fafc;
-            --sidebar-bg: #ffffff;
-            --text-main: #1e293b;
-            --text-muted: #64748b;
-        }
+{% block title %}Gestion des Salles | Admin{% endblock %}
 
-        body {
-            font-family: 'Outfit', sans-serif;
-            background: var(--bg-body);
-            margin: 0;
-            display: flex;
-            height: 100vh;
-            overflow: hidden;
-        }
+{% block page_title %}Salles{% endblock %}
 
-        /* SIDEBAR */
-        .sidebar {
-            width: 280px;
-            background: var(--sidebar-bg);
-            border-right: 1px solid #e2e8f0;
-            display: flex;
-            flex-direction: column;
-            padding: 30px 20px;
-            flex-shrink: 0;
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 1100;
-        }
+{% block content %}
 
-        .sidebar-brand {
-            display: flex;
-            align-items: center;
-            padding: 0 10px 30px;
-            font-weight: 700;
-            font-size: 20px;
-            color: var(--primary);
-        }
-
-        .sidebar-brand i {
-            margin-right: 12px;
-            font-size: 24px;
-        }
-
-        .nav-menu {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            flex-grow: 1;
-        }
-
-        .nav-item {
-            margin-bottom: 8px;
-        }
-
-        .nav-link {
-            display: flex;
-            align-items: center;
-            padding: 12px 15px;
-            border-radius: 12px;
-            color: var(--text-muted);
-            text-decoration: none !important;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
-
-        .nav-link i {
-            margin-right: 12px;
-            width: 20px;
-            text-align: center;
-        }
-
-        .nav-link:hover {
-            background: #f1f5f9;
-            color: var(--primary);
-        }
-
-        .nav-link.active {
-            background: var(--primary);
-            color: white;
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-        }
-
-        .sidebar-footer {
-            border-top: 1px solid #e2e8f0;
-            padding-top: 20px;
-        }
-
-        /* MAIN CONTENT */
-        .main-content {
-            flex-grow: 1;
-            padding: 40px;
-            overflow-y: auto;
-            transition: all 0.3s ease;
-        }
-
-        .header-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-        }
-
-        .mobile-nav-btn {
-            display: none;
-            width: 45px;
-            height: 45px;
-            background: white;
-            border-radius: 12px;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid #e2e8f0;
-            cursor: pointer;
-            margin-right: 15px;
-            color: var(--text-main);
-        }
-
-        .user-profile-top {
-            display: flex;
-            align-items: center;
-            background: white;
-            padding: 8px 16px;
-            border-radius: 16px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        }
-
-        .role-badge-top {
-            padding: 4px 10px;
-            border-radius: 99px;
-            background: #e0e7ff;
-            color: #4338ca;
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            margin-left: 10px;
-        }
-
-        .premium-card {
-            background: white;
-            border-radius: 24px;
-            padding: 30px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-            margin-bottom: 30px;
-        }
-
-        .form-control {
-            border-radius: 12px;
-            padding: 10px 15px;
-            border: 1px solid #e2e8f0;
-            font-size: 14px;
-        }
-
-        .btn-premium {
-            border-radius: 12px;
-            padding: 12px 25px;
-            font-weight: 700;
-            transition: all 0.2s;
-            border: none;
-        }
-
-        .btn-add {
-            background: var(--primary);
-            color: white;
-        }
-
-        /* Table Styling */
-        .table-responsive {
-            border-radius: 20px;
-            overflow: hidden;
-            background: white;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        }
-
-        .table thead th {
-            background: #f8fafc;
-            border-bottom: 1px solid #e2e8f0;
-            color: var(--text-muted);
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 12px;
-            padding: 15px 20px;
-        }
-
-        .table tbody td {
-            padding: 15px 20px;
-            vertical-align: middle;
-            border-top: 1px solid #f1f5f9;
-            font-size: 14px;
-        }
-
-        .room-img {
-            width: 60px;
-            height: 60px;
-            border-radius: 12px;
-            object-fit: cover;
-        }
-
-        .price-badge {
-            background: #dcfce7;
-            color: #15803d;
-            padding: 4px 10px;
-            border-radius: 8px;
-            font-weight: 700;
-        }
-
-        .action-btn {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border: none;
-            transition: all 0.2s;
-        }
-
-        .btn-delete {
-            background: #fee2e2;
-            color: #ef4444;
-        }
-
-        /* RESPONSIVE */
-        @media (max-width: 992px) {
-            .sidebar {
-                position: fixed;
-                top: 0;
-                left: 0;
-                height: 100vh;
-                transform: translateX(-100%);
-            }
-
-            .sidebar.active {
-                transform: translateX(0);
-                box-shadow: 20px 0 30px rgba(0, 0, 0, 0.1);
-            }
-
-            .mobile-nav-btn {
-                display: flex;
-            }
-
-            .main-content {
-                padding: 20px;
-            }
-
-            .header-bar h2 {
-                font-size: 18px !important;
-            }
-
-            .user-profile-top span:first-child {
-                display: none;
-            }
-
-            .premium-card {
-                padding: 20px;
-            }
-        }
-
-        .overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.4);
-            backdrop-filter: blur(4px);
-            z-index: 1050;
-        }
-
-        .overlay.active {
-            display: block;
-        }
-    </style>
-</head>
-
-<body>
-    <div class="overlay" id="overlay"></div>
-
-    <div class="sidebar" id="sidebar">
-        <div class="sidebar-brand"><i class="fas fa-rocket"></i> Admin Panel</div>
-        <ul class="nav-menu">
-            <li class="nav-item"><a href="{{ url_for('admin_home') }}" class="nav-link"><i class="fas fa-th-large"></i>
-                    Dashboard</a></li>
-            <li class="nav-item"><a href="{{ url_for('users_page') }}" class="nav-link"><i class="fas fa-users"></i>
-                    Utilisateurs</a></li>
-            <li class="nav-item"><a href="{{ url_for('locations_page') }}" class="nav-link"><i
-                        class="fas fa-map-marker-alt"></i> Locations</a></li>
-            <li class="nav-item"><a href="{{ url_for('rooms_page') }}" class="nav-link active"><i
-                        class="fas fa-door-open"></i> Salles</a></li>
-            <li class="nav-item"><a href="{{ url_for('bookings_page') }}" class="nav-link"><i
-                        class="fas fa-calendar-check"></i> Réservations</a></li>
-            <li class="nav-item"><a href="{{ url_for('recharges_page') }}" class="nav-link"><i
-                        class="fas fa-history"></i> Historique</a></li>
-            <li class="nav-item"><a href="{{ url_for('transactions_page') }}" class="nav-link"><i
-                        class="fas fa-exchange-alt"></i> Transactions</a></li>
-        </ul>
-        <div class="sidebar-footer">
-            <a href="{{ url_for('admin_profile') }}" class="nav-link"><i class="fas fa-user-circle"></i> Mon Profil</a>
-            <a href="{{ url_for('logout') }}" class="nav-link text-danger"><i class="fas fa-power-off"></i>
-                Déconnexion</a>
+        <!-- Bouton pour ouvrir le modal d'ajout -->
+        <div class="mb-4">
+            <button type="button" class="btn-premium btn-add" data-toggle="modal" data-target="#addRoomModal">
+                <i class="fas fa-plus mr-2"></i> Ajouter une salle
+            </button>
         </div>
-    </div>
 
-    <main class="main-content">
-        <header class="header-bar">
-            <div class="d-flex align-items-center">
-                <div class="mobile-nav-btn" id="sidebarOpen"><i class="fas fa-bars"></i></div>
-                <h2 class="font-weight-bold" style="font-size: 22px; margin: 0;">Salles</h2>
-            </div>
-            <div class="user-profile-top">
-                <span class="font-weight-bold">{{ admin_user.username }}</span>
-                <span class="role-badge-top">{{ admin_user.role.replace('_', ' ') }}</span>
-            </div>
-        </header>
+        <!-- ── Modal Ajout Salle ────────────────────────────── -->
+        <div class="modal fade" id="addRoomModal" tabindex="-1" role="dialog" aria-labelledby="addRoomModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl" role="document">
+                <div class="modal-content" style="background: var(--card-bg, #1e1e2e); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;">
+                    <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <h5 class="modal-title font-weight-bold text-white" id="addRoomModalLabel">
+                            <i class="fas fa-door-open mr-2" style="color: var(--primary);"></i> Nouvelle Salle
+                        </h5>
+                        <button type="button" class="close text-white" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <form action="{{ url_for('create_room_admin') }}" method="POST" enctype="multipart/form-data">
+                            <div class="row">
+                                <div class="col-md-4 col-sm-6 mb-3"><label class="small font-weight-bold text-light">Nom</label><input type="text" name="name" class="form-control" required></div>
+                                <div class="col-md-2 col-sm-6 mb-3"><label class="small font-weight-bold text-light">Capacité</label><input type="number" name="capacity" class="form-control" required></div>
+                                <div class="col-md-3 col-sm-12 mb-3"><label class="small font-weight-bold text-light">Location</label><select name="location_id" class="form-control" required>{% for location in locations %}<option value="{{ location.id }}">{{ location.name }}</option>{% endfor %}</select></div>
+                                <div class="col-md-3 col-sm-12 mb-3"><label class="small font-weight-bold text-light">Image</label><input type="file" name="image" class="form-control-file p-1" accept="image/*"></div>
+                            </div>
+                            
+                            <h6 class="font-weight-bold small text-uppercase text-light mt-2 mb-3 border-top pt-3">1. Types prédéfinis</h6>
+                            <div class="row mb-3">
+                                <div class="col-md-3">
+                                    <div class="custom-control custom-checkbox mb-2">
+                                        <input type="checkbox" class="custom-control-input" id="checkHourly" name="type_hourly" onchange="document.getElementById('priceHourly').disabled = !this.checked; if(this.checked) document.getElementById('priceHourly').required = true; else document.getElementById('priceHourly').required = false;">
+                                        <label class="custom-control-label font-weight-bold small text-light" for="checkHourly">1 Heure</label>
+                                    </div>
+                                    <input type="number" step="0.01" id="priceHourly" name="price_hourly" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="custom-control custom-checkbox mb-2">
+                                        <input type="checkbox" class="custom-control-input" id="checkHalfDay" name="type_half_day" onchange="document.getElementById('priceHalfDay').disabled = !this.checked; if(this.checked) document.getElementById('priceHalfDay').required = true; else document.getElementById('priceHalfDay').required = false;">
+                                        <label class="custom-control-label font-weight-bold small text-light" for="checkHalfDay">Demi-journée (5h)</label>
+                                    </div>
+                                    <input type="number" step="0.01" id="priceHalfDay" name="price_half_day" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="custom-control custom-checkbox mb-2">
+                                        <input type="checkbox" class="custom-control-input" id="checkFullDay" name="type_full_day" onchange="document.getElementById('priceFullDay').disabled = !this.checked; if(this.checked) document.getElementById('priceFullDay').required = true; else document.getElementById('priceFullDay').required = false;">
+                                        <label class="custom-control-label font-weight-bold small text-light" for="checkFullDay">Journée (12h)</label>
+                                    </div>
+                                    <input type="number" step="0.01" id="priceFullDay" name="price_full_day" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="custom-control custom-checkbox mb-2">
+                                        <input type="checkbox" class="custom-control-input" id="checkWeekly" name="type_weekly" onchange="document.getElementById('priceWeekly').disabled = !this.checked; if(this.checked) document.getElementById('priceWeekly').required = true; else document.getElementById('priceWeekly').required = false;">
+                                        <label class="custom-control-label font-weight-bold small text-light" for="checkWeekly">Semaine (5j)</label>
+                                    </div>
+                                    <input type="number" step="0.01" id="priceWeekly" name="price_weekly" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                                </div>
+                            </div>
 
-        <div class="premium-card">
-            <h4 class="mb-4 font-weight-bold small text-uppercase text-muted">Ajouter une salle</h4>
-            <form action="{{ url_for('create_room_admin') }}" method="POST" enctype="multipart/form-data">
-                <div class="row">
-                    <div class="col-md-4 col-sm-6 mb-3"><label class="small font-weight-bold">Nom</label><input
-                            type="text" name="name" class="form-control" required></div>
-                    <div class="col-md-2 col-sm-6 mb-3"><label class="small font-weight-bold">Capacité</label><input
-                            type="number" name="capacity" class="form-control" required></div>
-                    <div class="col-md-3 col-sm-6 mb-3"><label class="small font-weight-bold">Prix /
-                            Créneau</label><input type="number" step="0.01" name="slot_price" class="form-control"
-                            required></div>
-                    <div class="col-md-3 col-sm-6 mb-3"><label class="small font-weight-bold">Durée (min)</label><input
-                            type="number" name="slot_duration" class="form-control" value="60" required></div>
-                    <div class="col-md-4 col-sm-12 mb-3"><label class="small font-weight-bold">Location</label><select
-                            name="location_id" class="form-control" required>{% for location in locations %}<option
-                                value="{{ location.id }}">{{ location.name }}</option>{% endfor %}</select></div>
-                    <div class="col-md-4 col-sm-12 mb-3"><label class="small font-weight-bold">Image</label><input
-                            type="file" name="image" class="form-control-file p-1" accept="image/*"></div>
-                    <div class="col-md-4 d-flex align-items-end mb-3"><button type="submit"
-                            class="btn-premium btn-add w-100">Ajouter</button></div>
+                            <h6 class="font-weight-bold small text-uppercase text-light mt-2 mb-3 border-top pt-3">2. Type personnalisé (Optionnel)</h6>
+                            <div class="row">
+                                <div class="col-md-4 mb-3"><label class="small font-weight-bold text-light">Nom du type</label><input type="text" name="custom_type_name" class="form-control" placeholder="ex: Soirée"></div>
+                                <div class="col-md-3 mb-3"><label class="small font-weight-bold text-light">Durée (minutes)</label><input type="number" name="custom_type_duration" class="form-control" placeholder="ex: 240"></div>
+                                <div class="col-md-3 mb-3"><label class="small font-weight-bold text-light">Prix (DA)</label><input type="number" step="0.01" name="custom_type_price" class="form-control" placeholder="ex: 3000"></div>
+                                <div class="col-md-2 d-flex align-items-end mb-3"><button type="submit" class="btn-premium btn-add w-100">Ajouter</button></div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Recherche de salles ───────────────────────────────── -->
+        <div class="premium-card mb-4 mt-4">
+            <h6 class="font-weight-bold small text-uppercase text-muted mb-3"><i class="fas fa-filter mr-2"></i>Filtres de recherche</h6>
+            <form method="get" class="row align-items-end">
+                <div class="col-md-4 mb-3">
+                    <label class="small font-weight-bold">Nom de la salle</label>
+                    <div class="search-wrapper"><i class="fas fa-search text-muted mr-3"></i><input type="text" name="search_query" class="form-control search-input" placeholder="Rechercher par nom..." value="{{ request.query_params.get('search_query', '') }}"></div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="small font-weight-bold">Location</label>
+                    <select name="filter_location_id" class="form-control">
+                        <option value="">Toutes les locations</option>
+                        {% for loc in locations %}
+                        <option value="{{ loc.id }}" {% if request.query_params.get('filter_location_id')|string == loc.id|string %}selected{% endif %}>{{ loc.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="small font-weight-bold">Capacité min.</label>
+                    <input type="number" name="min_capacity" class="form-control" placeholder="Ex: 10" value="{{ request.query_params.get('min_capacity', '') }}">
+                </div>
+                <div class="col-md-2 mb-3">
+                    <button type="submit" class="btn-premium btn-search w-100">Filtrer</button>
                 </div>
             </form>
         </div>
 
+        <!-- ── Tableau des salles ────────────────────────────────── -->
         <div class="table-responsive">
             <table class="table">
                 <thead>
@@ -356,8 +115,7 @@
                         <th>Image</th>
                         <th>Nom</th>
                         <th>Capacité</th>
-                        <th>Prix</th>
-                        <th>Durée</th>
+                        <th>Types de réservation</th>
                         <th>Location</th>
                         <th class="text-center">Actions</th>
                     </tr>
@@ -371,12 +129,25 @@
                                     class="fas fa-image text-muted"></i></div>{% endif %}</td>
                         <td class="font-weight-bold text-nowrap">{{ room.name }}</td>
                         <td class="text-nowrap">{{ room.capacity }} pers.</td>
-                        <td><span class="price-badge">{{ room.slot_price }} DA</span></td>
-                        <td class="text-nowrap">{{ room.slot_duration }} min</td>
+                        <td>
+                            {% for bt in room.booking_types %}
+                                <span class="price-badge mr-1">{{ bt.name }} — {{ bt.price }} DA ({{ bt.duration_minutes }} min)</span>
+                            {% else %}
+                                <span class="text-muted small">Aucun type</span>
+                            {% endfor %}
+                        </td>
                         <td class="text-nowrap">{{ room.location.name }}</td>
-                        <td class="text-center">
+                        <td class="text-center text-nowrap">
+                            <!-- Bouton gérer types -->
+                            <button type="button" class="action-btn btn-edit mr-1"
+                                    title="Gérer les types"
+                                    data-toggle="modal"
+                                    data-target="#modalTypes{{ room.id }}">
+                                <i class="fas fa-tags"></i>
+                            </button>
+                            <!-- Bouton supprimer salle -->
                             <form action="{{ url_for('delete_room_admin', room_id=room.id) }}" method="POST"
-                                onsubmit="return confirm('Supprimer ?');"><button type="submit"
+                                class="d-inline" onsubmit="return confirm('Supprimer cette salle ?');"><button type="submit"
                                     class="action-btn btn-delete"><i class="fas fa-trash-alt"></i></button></form>
                         </td>
                     </tr>
@@ -384,15 +155,142 @@
                 </tbody>
             </table>
         </div>
-    </main>
 
-    <script>
-        const sidebar = document.getElementById('sidebar');
-        const overlay = document.getElementById('overlay');
-        const openBtn = document.getElementById('sidebarOpen');
-        openBtn.addEventListener('click', () => { sidebar.classList.add('active'); overlay.classList.add('active'); });
-        overlay.addEventListener('click', () => { sidebar.classList.remove('active'); overlay.classList.remove('active'); });
-    </script>
-</body>
+        <!-- ── Modals gestion types (un par salle) ───────────────── -->
+        {% for room in rooms %}
+        <div class="modal fade" id="modalTypes{{ room.id }}" tabindex="-1" role="dialog"
+             aria-labelledby="modalTypesLabel{{ room.id }}" aria-hidden="true">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content" style="background: var(--card-bg, #1e1e2e); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;">
 
-</html>
+                    <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <h5 class="modal-title font-weight-bold text-white" id="modalTypesLabel{{ room.id }}">
+                            <i class="fas fa-tags mr-2" style="color: var(--primary);"></i>
+                            Types de réservation — {{ room.name }}
+                        </h5>
+                        <button type="button" class="close text-white" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+
+                    <div class="modal-body">
+
+                        <!-- Liste des types existants -->
+                        {% if room.booking_types %}
+                        <table class="table table-sm mb-4">
+                            <thead>
+                                <tr>
+                                    <th>Nom</th>
+                                    <th>Durée</th>
+                                    <th>Prix</th>
+                                    <th class="text-center">Supprimer</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for bt in room.booking_types %}
+                                <tr>
+                                    <td class="font-weight-bold text-light">{{ bt.name }}</td>
+                                    <td class="text-light">{{ bt.duration_minutes }} min
+                                        {% if bt.duration_minutes == 60 %}<small class="text-muted">(1h)</small>
+                                        {% elif bt.duration_minutes == 300 %}<small class="text-muted">(demi-journée)</small>
+                                        {% elif bt.duration_minutes == 720 %}<small class="text-muted">(journée)</small>
+                                        {% elif bt.duration_minutes >= 2880 %}<small class="text-muted">(semaine)</small>
+                                        {% endif %}
+                                    </td>
+                                    <td><span class="price-badge">{{ bt.price }} DA</span></td>
+                                    <td class="text-center">
+                                        <form action="/admin/rooms/{{ room.id }}/booking-types/{{ bt.id }}/delete"
+                                              method="POST"
+                                              onsubmit="return confirm('Supprimer ce type ?');">
+                                            <button type="submit" class="action-btn btn-delete">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <p class="text-muted small mb-4"><i class="fas fa-info-circle mr-1"></i> Aucun type défini pour cette salle.</p>
+                        {% endif %}
+
+                        <!-- Formulaire ajout nouveau type -->
+                        <form action="/admin/rooms/{{ room.id }}/booking-types" method="POST">
+                            <h6 class="font-weight-bold small text-uppercase text-light mt-2 mb-3 border-top pt-3">1. Ajouter un type prédéfini</h6>
+                            <div class="row mb-3">
+                                <div class="col-md-3">
+                                    <div class="custom-control custom-checkbox mb-2">
+                                        <input type="checkbox" class="custom-control-input" id="checkHourly{{ room.id }}" name="type_hourly" onchange="document.getElementById('priceHourly{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceHourly{{ room.id }}').required = true; else document.getElementById('priceHourly{{ room.id }}').required = false;">
+                                        <label class="custom-control-label font-weight-bold small text-light" for="checkHourly{{ room.id }}">1 Heure</label>
+                                    </div>
+                                    <input type="number" step="0.01" id="priceHourly{{ room.id }}" name="price_hourly" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="custom-control custom-checkbox mb-2">
+                                        <input type="checkbox" class="custom-control-input" id="checkHalfDay{{ room.id }}" name="type_half_day" onchange="document.getElementById('priceHalfDay{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceHalfDay{{ room.id }}').required = true; else document.getElementById('priceHalfDay{{ room.id }}').required = false;">
+                                        <label class="custom-control-label font-weight-bold small text-light" for="checkHalfDay{{ room.id }}">Demi-journée (5h)</label>
+                                    </div>
+                                    <input type="number" step="0.01" id="priceHalfDay{{ room.id }}" name="price_half_day" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="custom-control custom-checkbox mb-2">
+                                        <input type="checkbox" class="custom-control-input" id="checkFullDay{{ room.id }}" name="type_full_day" onchange="document.getElementById('priceFullDay{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceFullDay{{ room.id }}').required = true; else document.getElementById('priceFullDay{{ room.id }}').required = false;">
+                                        <label class="custom-control-label font-weight-bold small text-light" for="checkFullDay{{ room.id }}">Journée (12h)</label>
+                                    </div>
+                                    <input type="number" step="0.01" id="priceFullDay{{ room.id }}" name="price_full_day" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="custom-control custom-checkbox mb-2">
+                                        <input type="checkbox" class="custom-control-input" id="checkWeekly{{ room.id }}" name="type_weekly" onchange="document.getElementById('priceWeekly{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceWeekly{{ room.id }}').required = true; else document.getElementById('priceWeekly{{ room.id }}').required = false;">
+                                        <label class="custom-control-label font-weight-bold small text-light" for="checkWeekly{{ room.id }}">Semaine (5j)</label>
+                                    </div>
+                                    <input type="number" step="0.01" id="priceWeekly{{ room.id }}" name="price_weekly" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                                </div>
+                            </div>
+
+                            <h6 class="font-weight-bold small text-uppercase text-light mt-2 mb-3 border-top pt-3">2. Ou un type personnalisé</h6>
+                            <div class="row">
+                                <div class="col-md-4 mb-3"><label class="small font-weight-bold text-light">Nom du type</label><input type="text" name="custom_type_name" class="form-control" placeholder="ex: Soirée"></div>
+                                <div class="col-md-3 mb-3"><label class="small font-weight-bold text-light">Durée (minutes)</label><input type="number" name="custom_type_duration" class="form-control" placeholder="ex: 240"></div>
+                                <div class="col-md-3 mb-3"><label class="small font-weight-bold text-light">Prix (DA)</label><input type="number" step="0.01" name="custom_type_price" class="form-control" placeholder="ex: 3000"></div>
+                                <div class="col-md-2 d-flex align-items-end mb-3"><button type="submit" class="btn-premium btn-add w-100">Ajouter</button></div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Gestion durée personnalisée
+document.querySelectorAll('select[name="duration_minutes"]').forEach(function(select) {
+    select.addEventListener('change', function() {
+        var roomId = this.closest('form').getAttribute('action').split('/')[3];
+        var customInput = document.getElementById('customDuration' + roomId);
+        if (this.value === 'custom') {
+            customInput.classList.remove('d-none');
+            customInput.required = true;
+        } else {
+            customInput.classList.add('d-none');
+            customInput.required = false;
+        }
+    });
+});
+
+// Remplacer duration_minutes par la valeur custom si saisie
+document.querySelectorAll('form[action*="booking-types"]').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+        var select = form.querySelector('select[name="duration_minutes"]');
+        var customInput = form.querySelector('input[name="duration_custom"]');
+        if (select && select.value === 'custom' && customInput && customInput.value) {
+            select.value = customInput.value;
+        }
+    });
+});
+</script>
+{% endblock %}

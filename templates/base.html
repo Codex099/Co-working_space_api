@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Tableau de bord | Admin{% endblock %}</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    {% block extra_head %}{% endblock %}
+    <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+    <div class="overlay" id="overlay"></div>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <i class="fas fa-rocket"></i> Admin Panel
+        </div>
+        
+        <ul class="nav-menu">
+            <li class="nav-item">
+                <a href="{{ url_for('admin_home') }}" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}">
+                    <i class="fas fa-th-large"></i> Dashboard
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('users_page') }}" class="nav-link {% if active_page == 'users' %}active{% endif %}">
+                    <i class="fas fa-users"></i> Utilisateurs
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('locations_page') }}" class="nav-link {% if active_page == 'locations' %}active{% endif %}">
+                    <i class="fas fa-map-marker-alt"></i> Locations
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('rooms_page') }}" class="nav-link {% if active_page == 'rooms' %}active{% endif %}">
+                    <i class="fas fa-door-open"></i> Salles
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('bookings_page') }}" class="nav-link {% if active_page == 'bookings' %}active{% endif %}">
+                    <i class="fas fa-calendar-check"></i> Réservations
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('recharges_page') }}" class="nav-link {% if active_page == 'recharges' %}active{% endif %}">
+                    <i class="fas fa-history"></i> Balance
+                </a>
+            </li>
+            {% if admin_user.role == 'admin' %}
+            <li class="nav-item">
+                <a href="{{ url_for('transactions_page') }}" class="nav-link {% if active_page == 'transactions' %}active{% endif %}">
+                    <i class="fas fa-exchange-alt"></i> Transactions
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+
+        <div class="sidebar-footer">
+            <a href="{{ url_for('admin_profile') }}" class="nav-link {% if active_page == 'profile' %}active{% endif %}">
+                <i class="fas fa-user-circle"></i> Mon Profil
+            </a>
+            <a href="{{ url_for('logout') }}" class="nav-link text-danger">
+                <i class="fas fa-power-off"></i> Déconnexion
+            </a>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+        <header class="header-bar">
+            <div class="d-flex align-items-center">
+                <div class="mobile-nav-btn" id="sidebarOpen">
+                    <i class="fas fa-bars"></i>
+                </div>
+                <h2 class="font-weight-bold" style="font-size: 22px; margin: 0;">{% block page_title %}{% endblock %}</h2>
+            </div>
+            <div class="user-profile-top">
+                <span class="font-weight-bold">{{ admin_user.username }}</span>
+                <span class="role-badge-top">{{ admin_user.role.replace('_', ' ') }}</span>
+            </div>
+        </header>
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+        const openBtn = document.getElementById('sidebarOpen');
+
+        openBtn.addEventListener('click', () => {
+            sidebar.classList.add('active');
+            overlay.classList.add('active');
+        });
+
+        overlay.addEventListener('click', () => {
+            sidebar.classList.remove('active');
+            overlay.classList.remove('active');
+        });
+    </script>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

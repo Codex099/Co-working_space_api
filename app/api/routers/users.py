@@ -17,6 +17,9 @@ from services.user_service import (
     _user_to_dict,
     get_user_by_uid,
     firebase_auth_or_create,
+    forgot_password_request_logic,
+    reset_password_confirm_logic,
+    verify_reset_code_logic,
 )
 from schemas import (
     UserCreate,
@@ -32,6 +35,9 @@ from schemas import (
     PhoneUpdateRequest,
     PhoneVerifyRequest,
     FirebaseAuthRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    VerifyResetCodeRequest,
 )
 from core.dependencies import get_current_user
 
@@ -70,6 +76,37 @@ async def local_login_route(data: LocalLoginRequest):
     """
     resp, code = local_login(data.email, data.password)
     return JSONResponse(content=resp, status_code=code)
+
+
+@router.post('/auth/local/forgot-password', tags=["Auth Locale"])
+async def forgot_password_route(data: ForgotPasswordRequest):
+    """
+    Demande de réinitialisation de mot de passe.
+    → Envoie un code par email si le compte existe.
+    """
+    resp, code = forgot_password_request_logic(data.email)
+    return JSONResponse(content=resp, status_code=code)
+
+
+@router.post('/auth/local/verify-reset-code', tags=["Auth Locale"])
+async def verify_reset_code_route(data: VerifyResetCodeRequest):
+    """
+    Étape 2 : Vérification du code reçu par email.
+    → Retourne un token temporaire si le code est valide.
+    """
+    resp, code = verify_reset_code_logic(data.email, data.code)
+    return JSONResponse(content=resp, status_code=code)
+
+
+@router.post('/auth/local/reset-password', tags=["Auth Locale"])
+async def reset_password_route(data: ResetPasswordRequest):
+    """
+    Étape 3 : Réinitialisation définitive du mot de passe avec le token.
+    """
+    resp, code = reset_password_confirm_logic(data.email, data.token, data.new_password)
+    return JSONResponse(content=resp, status_code=code)
+
+
 # ============================================================
 #  AUTH FIREBASE — Token Firebase → JWT local
 # ============================================================
@@ -130,8 +167,7 @@ def update_password_route(data: UpdatePasswordRequest, current_user: dict = Depe
         uid=current_user["uid"],
         old_password=data.old_password,
         new_password=data.new_password
-        
-    )
+        )
     return JSONResponse(content=resp, status_code=code)
 
 @router.post('/me/email/request', tags=["update"])
