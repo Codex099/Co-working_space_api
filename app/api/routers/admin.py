@@ -33,8 +33,24 @@ def b64encode_filter(data):
 def zfill_filter(s, width=2):
     return str(s).zfill(width)
 
+def get_tx_description(tx):
+    from models.domain import Booking
+    if tx.type == 'recharge':
+        return f"Recharge +{tx.amount} DA"
+    elif tx.type == 'refund':
+        return f"Remboursement +{tx.amount} DA"
+    elif tx.type in ['booking', 'cancellation']:
+        booking = Booking.query.get(tx.ref_id) if tx.ref_id else None
+        room_name = booking.room.name if (booking and booking.room) else f"#{tx.ref_id}"
+        if tx.type == 'booking':
+            return f"Réservation salle {room_name}"
+        else:
+            return f"Annulation réservation salle {room_name} (+{tx.amount} DA remboursé)"
+    return f"Transaction {tx.type}"
+
 templates.env.filters['b64encode'] = b64encode_filter
 templates.env.filters['zfill'] = zfill_filter
+templates.env.filters['tx_description'] = get_tx_description
 
 # --- AUTHENTICATION ROUTES ---
 
@@ -91,13 +107,13 @@ def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie
         current_date += timedelta(days=1)
 
     if admin_user.role == 'admin':
-        # Admin: Global statistics
-        total_users = User.query.count()
-        total_bookings = Booking.query.count()
+        # Admin: Global statistics (last 7 days)
+        total_users = User.query.filter(User.created_at >= datetime.combine(seven_days_ago, datetime.min.time())).count()
+        total_bookings = Booking.query.filter(Booking.start_time >= datetime.combine(seven_days_ago, datetime.min.time())).count()
         total_locations = Location.query.count()
         
-        # Total revenue is the sum of recharge amounts (credits added to system)
-        total_revenue_val = db.session.query(func.sum(Recharge.amount)).scalar() or 0.0
+        # Total revenue is the sum of recharge amounts (credits added to system) over last 7 days
+        total_revenue_val = db.session.query(func.sum(Recharge.amount)).filter(Recharge.date >= datetime.combine(seven_days_ago, datetime.min.time())).scalar() or 0.0
         total_revenue = round(total_revenue_val, 2)
 
         # 7-day bookings and revenue data
@@ -149,7 +165,7 @@ def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie
         for tx in recent_txs:
             recent_events.append({
                 'username': tx.user.username if tx.user else 'Inconnu',
-                'description': tx.description,
+                'description': get_tx_description(tx),
                 'date': tx.created_at,
                 'amount': abs(tx.amount),
                 'type': tx.type
@@ -168,14 +184,16 @@ def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie
 
         # Get bookings for these rooms
         if my_room_ids:
-            my_bookings = Booking.query.filter(Booking.room_id.in_(my_room_ids)).all()
+            my_bookings_all = Booking.query.filter(Booking.room_id.in_(my_room_ids)).all()
+            # Filter for the last 7 days only
+            my_bookings = [b for b in my_bookings_all if b.start_time >= datetime.combine(seven_days_ago, datetime.min.time())]
             total_bookings = len(my_bookings)
             
-            # Sum of total price of bookings on manager's rooms
+            # Sum of total price of bookings on manager's rooms for last 7 days
             total_revenue_val = sum(b.total_price or 0.0 for b in my_bookings)
             total_revenue = round(total_revenue_val, 2)
 
-            # Unique users who booked at least once
+            # Unique users who booked at least once in last 7 days
             my_user_ids = {b.user_id for b in my_bookings}
             total_users = len(my_user_ids)
 
@@ -235,8 +253,8 @@ def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie
             total_bookings = 0
             total_revenue = 0.0
             total_users = 0
-            chart_bookings = [0] * 7
-            chart_revenue = [0.0] * 7
+            chart_bookings = [0] * 30
+            chart_revenue = [0.0] * 30
             recent_events = []
 
     return templates.TemplateResponse(request, 'home.html', {

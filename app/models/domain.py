@@ -46,17 +46,6 @@ class BalanceTransaction(Base):
     ref_id        = Column(Integer, nullable=True)
     created_at    = Column(DateTime, default=datetime.utcnow)
 
-    @property
-    def description(self) -> str:
-        if self.type == 'recharge':
-            return f"Recharge +{self.amount} DA"
-        elif self.type == 'booking':
-            return f"Réservation salle #{self.ref_id}"
-        elif self.type == 'refund':
-            return f"Remboursement +{self.amount} DA"
-        elif self.type == 'cancellation':
-            return f"Annulation réservation #{self.ref_id} (+{self.amount} DA remboursé)"
-        return f"Transaction {self.type}"
 
 
 class Location(Base):

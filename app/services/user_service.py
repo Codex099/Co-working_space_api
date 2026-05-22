@@ -281,7 +281,7 @@ def get_user_by_uid_logic(uid: str):
     return _user_to_dict(user), 200
 
 def get_balance_history_logic(uid: str):
-    from models.domain import BalanceTransaction
+    from models.domain import BalanceTransaction, Booking
     user = get_user_by_uid(uid)
     if not user:
         return {"error": "Utilisateur introuvable"}, 404
@@ -289,15 +289,31 @@ def get_balance_history_logic(uid: str):
     transactions = BalanceTransaction.query.filter_by(user_id=uid).order_by(BalanceTransaction.created_at.desc()).all()
     result = []
     for tx in transactions:
-        result.append({
+        tx_data = {
             "id": tx.id,
             "type": tx.type,
             "amount": tx.amount,
             "balance_after": tx.balance_after,
             "ref_id": tx.ref_id,
-            "description": tx.description,
-            "created_at": tx.created_at.isoformat() if tx.created_at else None
-        })
+            "created_at": tx.created_at.isoformat() if tx.created_at else None,
+        }
+
+        if tx.type in ['booking', 'cancellation'] and tx.ref_id:
+            booking = Booking.query.get(tx.ref_id)
+            if booking and booking.room:
+                tx_data["room_name"] = booking.room.name
+                if booking.room.location:
+                    tx_data["location_name"] = booking.room.location.name
+                else:
+                    tx_data["location_name"] = None
+            else:
+                tx_data["room_name"] = None
+                tx_data["location_name"] = None
+        else:
+            tx_data["room_name"] = None
+            tx_data["location_name"] = None
+
+        result.append(tx_data)
     return result, 200
 
 def update_user_by_uid(uid: str, data: dict):

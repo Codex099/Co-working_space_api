@@ -42,7 +42,7 @@
                                 <span class="type-badge badge-secondary">{{ tx.type }}</span>
                             {% endif %}
                         </td>
-                        <td><span class="text-dark">{{ tx.description }}</span></td>
+                        <td><span class="text-dark">{{ tx|tx_description }}</span></td>
                         <td class="text-nowrap">
                             {% if tx.amount >= 0 %}
                                 <span class="amount-credit">+{{ tx.amount }} DA</span>
