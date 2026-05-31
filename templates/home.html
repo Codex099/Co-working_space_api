@@ -11,69 +11,54 @@
 
 {% block content %}
         <section class="welcome-card">
-            <h1>Bonjour, {{ admin_user.username }} ! 👋</h1>
-            <p>Bienvenue sur votre espace d'administration. Gérez vos utilisateurs, vos espaces et suivez vos réservations en toute simplicité.</p>
+            <h1>Bonjour, {{ admin_user.username }} </h1>
+            <p>Bienvenue sur votre espace d'administration. Gérez vos utilisateurs, vos espaces et suivez vos réservations en toute simplicité</p>
         </section>
 
         <section class="stats-grid">
-            <div class="stat-card">
+            <a href="{{ url_for('users_page') }}" class="stat-card" style="text-decoration: none; color: inherit;">
                 <div class="stat-icon bg-users"><i class="fas fa-users"></i></div>
                 <div class="stat-info">
-                    <h3>Nouveaux Utilisateurs <small class="text-muted" style="font-size:12px;">(7j)</small></h3>
+                    <h3>Utilisateurs <small class="text-muted" style="font-size:12px;">({{ days }}j)</small></h3>
                     <p>{{ total_users }}</p>
                 </div>
-            </div>
-            <div class="stat-card">
+            </a>
+            <a href="{{ url_for('bookings_page') }}" class="stat-card" style="text-decoration: none; color: inherit;">
                 <div class="stat-icon bg-bookings"><i class="fas fa-calendar-alt"></i></div>
                 <div class="stat-info">
-                    <h3>Réservations <small class="text-muted" style="font-size:12px;">(7j)</small></h3>
+                    <h3>Réservations <small class="text-muted" style="font-size:12px;">({{ days }}j)</small></h3>
                     <p>{{ total_bookings }}</p>
                 </div>
-            </div>
-            <div class="stat-card">
+            </a>
+            <a href="{{ url_for('locations_page') }}" class="stat-card" style="text-decoration: none; color: inherit;">
                 <div class="stat-icon bg-locations"><i class="fas fa-building"></i></div>
                 <div class="stat-info">
-                    <h3>Locations Actives</h3>
+                    <h3>Locations</h3>
                     <p>{{ total_locations }}</p>
                 </div>
-            </div>
-            <div class="stat-card">
+            </a>
+            <a href="/admin/revenue_stats" class="stat-card" style="text-decoration: none; color: inherit;">
                 <div class="stat-icon bg-revenue"><i class="fas fa-wallet"></i></div>
                 <div class="stat-info">
-                    <h3>Revenu Total <small class="text-muted" style="font-size:12px;">(7j)</small></h3>
+                    <h3>Revenu Total <small class="text-muted" style="font-size:12px;">({{ days }}j)</small></h3>
                     <p>{{ total_revenue }} DA</p>
                 </div>
-            </div>
+            </a>
         </section>
         
         <div class="row mt-4">
-            <div class="col-lg-8 mb-4">
+            <div class="col-md-12 mb-4">
                 <div class="bg-white p-4" style="border-radius: 24px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); min-height: 400px; display: flex; flex-direction: column;">
-                    <h4 class="font-weight-bold mb-4" style="font-size: 18px; color: var(--text-main);"><i class="fas fa-chart-line mr-2 text-primary"></i> Activité des 7 Derniers Jours</h4>
-                    <div style="flex-grow: 1; position: relative; height: 300px;">
-                        <canvas id="dashboardChart"></canvas>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-4 mb-4">
-                <div class="bg-white p-4" style="border-radius: 24px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); min-height: 400px; display: flex; flex-direction: column;">
-                    <h4 class="font-weight-bold mb-4" style="font-size: 18px; color: var(--text-main);"><i class="fas fa-history mr-2 text-success"></i> Activités Récentes</h4>
-                    <div class="timeline" style="flex-grow: 1; overflow-y: auto; max-height: 300px; padding-right: 5px;">
-                        {% for event in recent_events %}
-                        <div class="d-flex align-items-start mb-3" style="border-left: 2px solid #e2e8f0; padding-left: 15px; position: relative;">
-                            <div style="position: absolute; left: -6px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: {% if event.type == 'recharge' or event.type == 'refund' %}#10b981{% else %}#ef4444{% endif %};"></div>
-                            <div style="flex-grow: 1; padding-right: 10px;">
-                                <div class="small font-weight-bold text-dark">{{ event.username }}</div>
-                                <div class="small text-muted" style="font-size: 11px; line-height: 1.2;">{{ event.description }}</div>
-                                <small class="text-muted" style="font-size: 9px;">{{ event.date.strftime('%d/%m à %H:%M') }}</small>
-                            </div>
-                            <div class="font-weight-bold {% if event.type == 'recharge' or event.type == 'refund' %}text-success{% else %}text-danger{% endif %} small text-nowrap">
-                                {% if event.type == 'recharge' or event.type == 'refund' %}+{% endif %}{{ event.amount }} DA
-                            </div>
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h4 class="font-weight-bold m-0" style="font-size: 18px; color: var(--text-main);"><i class="fas fa-chart-line mr-2 text-primary"></i> Activité des {{ days }} Derniers Jours</h4>
+                        <div class="btn-group">
+                            <a href="?days=7" class="btn btn-sm {% if days == 7 %}btn-primary{% else %}btn-outline-primary{% endif %}"><i class="fas fa-chevron-left mr-1"></i>7j</a>
+                            <a href="?days=30" class="btn btn-sm {% if days == 30 %}btn-primary{% else %}btn-outline-primary{% endif %}">30j</a>
+                            <a href="?days=90" class="btn btn-sm {% if days == 90 %}btn-primary{% else %}btn-outline-primary{% endif %}">90j<i class="fas fa-chevron-right ml-1"></i></a>
                         </div>
-                        {% else %}
-                        <p class="text-muted small text-center py-5">Aucune activité récente pour le moment.</p>
-                        {% endfor %}
+                    </div>
+                    <div style="flex-grow: 1; position: relative; height: 350px;">
+                        <canvas id="dashboardChart"></canvas>
                     </div>
                 </div>
             </div>
@@ -85,15 +70,17 @@
         // Configuration de Chart.js
         const ctx = document.getElementById('dashboardChart').getContext('2d');
         const chartLabels = {{ chart_labels|tojson }};
-        const chartBookings = {{ chart_bookings|tojson }};
+        const chartConfirmed = {{ chart_confirmed|tojson }};
+        const chartCancelled = {{ chart_cancelled|tojson }};
         const chartRevenue = {{ chart_revenue|tojson }};
 
         new Chart(ctx, {
-            type: 'line',
+            type: 'bar',
             data: {
                 labels: chartLabels,
                 datasets: [
                     {
+                        type: 'line',
                         label: 'Revenus (DA)',
                         data: chartRevenue,
                         borderColor: '#6366f1',
@@ -106,16 +93,20 @@
                         pointHoverRadius: 6
                     },
                     {
-                        label: 'Réservations',
-                        data: chartBookings,
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
-                        borderWidth: 3,
-                        tension: 0.35,
-                        fill: true,
-                        yAxisID: 'y1',
-                        pointBackgroundColor: '#10b981',
-                        pointHoverRadius: 6
+                        type: 'bar',
+                        label: 'Réservations Confirmées',
+                        data: chartConfirmed,
+                        backgroundColor: '#10b981',
+                        borderRadius: 4,
+                        yAxisID: 'y1'
+                    },
+                    {
+                        type: 'bar',
+                        label: 'Réservations Annulées',
+                        data: chartCancelled,
+                        backgroundColor: '#ef4444',
+                        borderRadius: 4,
+                        yAxisID: 'y1'
                     }
                 ]
             },
@@ -137,6 +128,7 @@
                 },
                 scales: {
                     x: {
+                        stacked: false,
                         grid: {
                             display: false
                         },

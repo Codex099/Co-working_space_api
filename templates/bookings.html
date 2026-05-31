@@ -8,16 +8,30 @@
 {% block content %}
         <div class="premium-card">
             <form method="get" class="form-row align-items-center">
-                <div class="col-md-9 col-sm-8 mb-2 mb-md-0">
-                    <div class="search-wrapper"><i class="fas fa-search text-muted mr-3"></i><input type="text" name="search_email" class="form-control search-input" placeholder="Email utilisateur..." value="{{ request.query_params.get('search_email', '') }}"></div>
+                <div class="col-md-3 col-sm-12 mb-2 mb-md-0">
+                    <div class="search-wrapper"><i class="fas fa-search text-muted mr-3"></i><input type="text" name="search_email" class="form-control search-input" placeholder="Email..." value="{{ request.query_params.get('search_email', '') }}"></div>
                 </div>
-                <div class="col-md-3 col-sm-4"><button type="submit" class="btn-premium btn-search w-100">Filtrer</button></div>
+                <div class="col-md-3 col-sm-12 mb-2 mb-md-0">
+                    <div class="search-wrapper"><i class="fas fa-calendar-alt text-muted mr-3"></i><input type="date" name="search_date" class="form-control search-input" value="{{ request.query_params.get('search_date', '') }}"></div>
+                </div>
+                <div class="col-md-3 col-sm-12 mb-2 mb-md-0">
+                    <div class="search-wrapper">
+                        <i class="fas fa-filter text-muted mr-3"></i>
+                        <select name="search_status" class="form-control border-0 p-0 shadow-none bg-transparent">
+                            <option value="">Tous les statuts</option>
+                            <option value="confirmed" {% if request.query_params.get('search_status') == 'confirmed' %}selected{% endif %}>Confirmée / Prochaine</option>
+                            <option value="cancelled" {% if request.query_params.get('search_status') == 'cancelled' %}selected{% endif %}>Annulée</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2 col-sm-12"><button type="submit" class="btn-premium btn-search w-100">Filtrer</button></div>
+
             </form>
         </div>
 
         <div class="table-responsive">
             <table class="table">
-                <thead><tr><th>Utilisateur</th><th>Salle</th><th>Type</th><th>Début</th><th>Fin</th><th>Prix Total</th><th>Date</th></tr></thead>
+                <thead><tr><th>Utilisateur</th><th>Salle</th><th>Type</th><th>Début</th><th>Fin</th><th>Prix Total</th><th>Date</th><th>Statut</th></tr></thead>
                 <tbody>
                     {% for booking in bookings %}
                     <tr>
@@ -30,6 +44,15 @@
                         </td>
                         <td class="text-nowrap"><span class="price-text">{{ booking.total_price }} DA</span></td>
                         <td class="text-nowrap"><div class="small font-weight-bold">{{ booking.start_time.strftime('%d/%m/%Y') }}</div></td>
+                        <td class="text-nowrap">
+                            {% if booking.status == 'cancelled' %}
+                                <span class="badge badge-danger px-3 py-2" style="border-radius: 8px;">Annulée</span>
+                            {% elif booking.status == 'upcoming' %}
+                                <span class="badge badge-info px-3 py-2" style="border-radius: 8px; background-color: #6366f1;">Prochaine</span>
+                            {% else %}
+                                <span class="badge badge-success px-3 py-2" style="border-radius: 8px;">Confirmée</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

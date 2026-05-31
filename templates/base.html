@@ -45,11 +45,7 @@
                     <i class="fas fa-calendar-check"></i> Réservations
                 </a>
             </li>
-            <li class="nav-item">
-                <a href="{{ url_for('recharges_page') }}" class="nav-link {% if active_page == 'recharges' %}active{% endif %}">
-                    <i class="fas fa-history"></i> Balance
-                </a>
-            </li>
+
             {% if admin_user.role == 'admin' %}
             <li class="nav-item">
                 <a href="{{ url_for('transactions_page') }}" class="nav-link {% if active_page == 'transactions' %}active{% endif %}">

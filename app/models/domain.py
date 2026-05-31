@@ -43,7 +43,7 @@ class BalanceTransaction(Base):
     type          = Column(String(20), nullable=False)
     amount        = Column(Float, nullable=False)
     balance_after = Column(Float, nullable=False)
-    ref_id        = Column(Integer, nullable=True)
+    ref_id        = Column(Integer, nullable=True) # ID of the booking or recharge
     created_at    = Column(DateTime, default=datetime.utcnow)
 
 
@@ -89,7 +89,7 @@ class Booking(Base):
     start_time      = Column(DateTime, nullable=False)
     end_time        = Column(DateTime, nullable=False)
     total_price     = Column(Float, nullable=True)
-    status          = Column(String(20), nullable=False, default='confirmed')  # 'confirmed' | 'cancelled'
+    status          = Column(String(20), nullable=False, default='upcoming')  # 'upcoming' | 'confirmed' | 'cancelled'
     cancelled_at    = Column(DateTime, nullable=True)
     refund_amount   = Column(Float, nullable=True)
 

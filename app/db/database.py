@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker, declarative_base
-from sqlalchemy.pool import StaticPool, NullPool
+from sqlalchemy.pool import NullPool
 from core.config import settings
 
 # ============================================================
@@ -15,8 +15,7 @@ from core.config import settings
 if settings.DATABASE_URL.startswith("sqlite"):
     engine = create_engine(
         settings.DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,          # Connexion unique — parfait pour SQLite
+        connect_args={"check_same_thread": False, "timeout": 15},
     )
 else:
     engine = create_engine(

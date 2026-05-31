@@ -78,6 +78,20 @@ def is_available(room_id, start_dt, duration_minutes):
 def get_all_bookings():
     return Booking.query.all()
 
+def update_expired_bookings():
+    """Vérifie les réservations 'upcoming' dont le temps est passé et les passe en 'confirmed'."""
+    now = datetime.utcnow()
+    expired_bookings = Booking.query.filter(
+        Booking.status == 'upcoming',
+        Booking.start_time <= now
+    ).all()
+    
+    if expired_bookings:
+        for b in expired_bookings:
+            b.status = 'confirmed'
+        db.session.commit()
+    return len(expired_bookings)
+
 def create_booking(data):
     from fastapi import HTTPException
     from services.user_service import get_user_by_uid, insert_balance_tx
@@ -340,6 +354,15 @@ def get_user_reservations(user_uid):
         is_confirmed        = (b.status if b.status else "confirmed") == "confirmed"
         can_cancel          = is_confirmed and seconds_until_start >= 24 * 3600
 
+        # Calcul du statut à afficher : on utilise maintenant celui stocké en BDD
+        # mais on s'assure d'avoir appelé update_expired_bookings() avant.
+        if b.status == 'cancelled':
+            display_status = "Annulée"
+        elif b.status == 'upcoming':
+            display_status = "Prochaine"
+        else:
+            display_status = "Confirmée"
+
         result.append({
             "booking_id":        b.id,
             "room_name":         room.name if room else "",
@@ -352,7 +375,8 @@ def get_user_reservations(user_uid):
             "duration_min":      total_duration,
             "price":             b.total_price,
             "room_image":        f"data:image/jpeg;base64,{image_b64}" if image_b64 else "",
-            "status":            b.status if b.status else "confirmed",
+            "status":            display_status,
+            "internal_status":   b.status if b.status else "confirmed",
             "cancelled_at":      b.cancelled_at.strftime("%Y-%m-%d %H:%M") if b.cancelled_at else None,
             "refund_amount":     b.refund_amount,
             # Champs pour Flutter (annulation)

@@ -157,6 +157,10 @@ def local_login(email: str, password: str):
     email = email.lower().strip()
     user = get_user_by_email(email)
 
+    
+    if user.role == "admin" or user.role == "space_manager":
+        return {"error": "Vous n'avez pas accès à cette fonctionnalité"}, 403
+
     if not user:
         return {"error": "Email ou mot de passe incorrect"}, 401
 
@@ -330,9 +334,9 @@ def update_password_logic(uid: str,new_password: str, old_password: str = None )
     if not user:
         return {"error": "Utilisateur introuvable"}, 404
     
-    # Si c'est un compte local (pas Firebase), la vérification de l'ancien mot de passe est obligatoire
-    if user.auth_provider != "firebase":
-        if not old_password or not user.hashed_password or not verify_password(old_password, user.hashed_password):
+    # Si un mot de passe existe déjà (même pour un compte Firebase), la vérification de l'ancien est obligatoire
+    if user.hashed_password:
+        
             return {"error": "Ancien mot de passe incorrect"}, 401
     
     user.hashed_password = hash_password(new_password)

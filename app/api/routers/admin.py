@@ -5,7 +5,7 @@ from typing import Optional
 import base64
 import os
 from datetime import datetime, timedelta
-from sqlalchemy import func
+from sqlalchemy import func, desc
 from db.database import db
 from models.domain import BalanceTransaction
 
@@ -18,7 +18,7 @@ from services.location_service import (
     create_room, delete_room, delete_location
 )
 from services.recharge_service import get_user_recharges, create_recharge_db as create_recharge, get_all_recharges
-from services.booking_service import get_all_bookings
+from services.booking_service import get_all_bookings, update_expired_bookings
 from core.dependencies import get_admin_user_from_cookie
 
 admin_bp = APIRouter(prefix='/admin')
@@ -92,38 +92,48 @@ def logout():
 # --- PROTECTED ROUTES ---
 
 @admin_bp.get('/', response_class=HTMLResponse)
-def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie)):
+def admin_home(request: Request, days: int = 7, admin_user = Depends(get_admin_user_from_cookie)):
     from models.domain import User, Booking, Location, Room, Recharge, BalanceTransaction
 
-    # Determine date range for the last 7 days (including today)
+    # Determine date range
+    if days not in [7, 30, 90]:
+        days = 7
+
     today = datetime.utcnow().date()
-    seven_days_ago = today - timedelta(days=6)
+    days_ago = today - timedelta(days=days-1)
 
     # Prepare labels for Chart.js
     chart_labels = []
-    current_date = seven_days_ago
+    current_date = days_ago
     while current_date <= today:
-        chart_labels.append(current_date.strftime('%d/%m'))
+        if days == 7:
+            chart_labels.append(current_date.strftime('%d/%m'))
+        elif days == 30:
+            chart_labels.append(current_date.strftime('%d/%m'))
+        else:
+            chart_labels.append(current_date.strftime('%d/%m'))
         current_date += timedelta(days=1)
 
     if admin_user.role == 'admin':
-        # Admin: Global statistics (last 7 days)
-        total_users = User.query.filter(User.created_at >= datetime.combine(seven_days_ago, datetime.min.time())).count()
-        total_bookings = Booking.query.filter(Booking.start_time >= datetime.combine(seven_days_ago, datetime.min.time())).count()
+        # Admin: Global statistics (last N days)
+        total_users = User.query.filter(User.created_at >= datetime.combine(days_ago, datetime.min.time())).count()
+        total_bookings = Booking.query.filter(Booking.start_time >= datetime.combine(days_ago, datetime.min.time())).count()
         total_locations = Location.query.count()
         
-        # Total revenue is the sum of recharge amounts (credits added to system) over last 7 days
-        total_revenue_val = db.session.query(func.sum(Recharge.amount)).filter(Recharge.date >= datetime.combine(seven_days_ago, datetime.min.time())).scalar() or 0.0
+        # Total revenue is the sum of recharge amounts (credits added to system) over last N days
+        total_revenue_val = db.session.query(func.sum(Recharge.amount)).filter(Recharge.date >= datetime.combine(days_ago, datetime.min.time())).scalar() or 0.0
         total_revenue = round(total_revenue_val, 2)
 
-        # 7-day bookings and revenue data
-        # Bookings per day (Booking.start_time is now a DateTime)
-        bookings_by_day = db.session.query(
+        # Confirmed Bookings per day
+        confirmed_by_day = db.session.query(
             func.date(Booking.start_time).label('day'),
             func.count(Booking.id)
-        ).filter(Booking.start_time >= datetime.combine(seven_days_ago, datetime.min.time())).group_by('day').all()
-        bookings_map = {}
-        for b in bookings_by_day:
+        ).filter(
+            Booking.start_time >= datetime.combine(days_ago, datetime.min.time()),
+            (Booking.status.in_(['confirmed', 'upcoming'])) | (Booking.status == None)
+        ).group_by('day').all()
+        confirmed_map = {}
+        for b in confirmed_by_day:
             day_key = b[0]
             if isinstance(day_key, str):
                 try:
@@ -131,13 +141,32 @@ def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie
                     day_key = dt_date.fromisoformat(day_key)
                 except ValueError:
                     pass
-            bookings_map[day_key] = b[1]
+            confirmed_map[day_key] = b[1]
+            
+        # Cancelled Bookings per day
+        cancelled_by_day = db.session.query(
+            func.date(func.coalesce(Booking.cancelled_at, Booking.start_time)).label('day'),
+            func.count(Booking.id)
+        ).filter(
+            func.coalesce(Booking.cancelled_at, Booking.start_time) >= datetime.combine(days_ago, datetime.min.time()),
+            Booking.status == 'cancelled'
+        ).group_by('day').all()
+        cancelled_map = {}
+        for b in cancelled_by_day:
+            day_key = b[0]
+            if isinstance(day_key, str):
+                try:
+                    from datetime import date as dt_date
+                    day_key = dt_date.fromisoformat(day_key)
+                except ValueError:
+                    pass
+            cancelled_map[day_key] = b[1]
 
         # Revenue (recharges) per day
         recharges_by_day = db.session.query(
             func.date(Recharge.date).label('day'),
             func.sum(Recharge.amount)
-        ).filter(Recharge.date >= datetime.combine(seven_days_ago, datetime.min.time())).group_by('day').all()
+        ).filter(Recharge.date >= datetime.combine(days_ago, datetime.min.time())).group_by('day').all()
         
         revenue_map = {}
         for r in recharges_by_day:
@@ -150,26 +179,18 @@ def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie
             revenue_map[day_key] = float(r[1] or 0.0)
 
         # Compile data for Chart.js
-        chart_bookings = []
+        chart_confirmed = []
+        chart_cancelled = []
         chart_revenue = []
-        current_date = seven_days_ago
+        current_date = days_ago
         while current_date <= today:
-            chart_bookings.append(bookings_map.get(current_date, 0))
-            rev_val = revenue_map.get(current_date) or revenue_map.get(current_date.strftime('%Y-%m-%d')) or 0.0
+            # Use both date object and string to be safe against different DB backends
+            day_str = current_date.strftime('%Y-%m-%d')
+            chart_confirmed.append(confirmed_map.get(current_date) or confirmed_map.get(day_str) or 0)
+            chart_cancelled.append(cancelled_map.get(current_date) or cancelled_map.get(day_str) or 0)
+            rev_val = revenue_map.get(current_date) or revenue_map.get(day_str) or 0.0
             chart_revenue.append(round(rev_val, 2))
             current_date += timedelta(days=1)
-
-        # Recent activities (last 5 balance transactions)
-        recent_txs = BalanceTransaction.query.order_by(BalanceTransaction.created_at.desc()).limit(5).all()
-        recent_events = []
-        for tx in recent_txs:
-            recent_events.append({
-                'username': tx.user.username if tx.user else 'Inconnu',
-                'description': get_tx_description(tx),
-                'date': tx.created_at,
-                'amount': abs(tx.amount),
-                'type': tx.type
-            })
 
     else:
         # Space Manager: Specific to managed locations
@@ -182,28 +203,29 @@ def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie
         my_rooms = Room.query.filter(Room.location_id.in_(my_location_ids)).all() if my_location_ids else []
         my_room_ids = [room.id for room in my_rooms]
 
-        # Get bookings for these rooms
         if my_room_ids:
             my_bookings_all = Booking.query.filter(Booking.room_id.in_(my_room_ids)).all()
-            # Filter for the last 7 days only
-            my_bookings = [b for b in my_bookings_all if b.start_time >= datetime.combine(seven_days_ago, datetime.min.time())]
+            my_bookings = [b for b in my_bookings_all if b.start_time >= datetime.combine(days_ago, datetime.min.time())]
             total_bookings = len(my_bookings)
             
-            # Sum of total price of bookings on manager's rooms for last 7 days
-            total_revenue_val = sum(b.total_price or 0.0 for b in my_bookings)
+            # Sum of total price of confirmed bookings on manager's rooms for last N days
+            total_revenue_val = sum(b.total_price or 0.0 for b in my_bookings if b.status in ['confirmed', 'upcoming', None])
             total_revenue = round(total_revenue_val, 2)
 
-            # Unique users who booked at least once in last 7 days
             my_user_ids = {b.user_id for b in my_bookings}
             total_users = len(my_user_ids)
 
-            # Bookings per day in the last 7 days
-            bookings_by_day = db.session.query(
+            # Confirmed per day
+            confirmed_by_day = db.session.query(
                 func.date(Booking.start_time).label('day'),
                 func.count(Booking.id)
-            ).filter(Booking.start_time >= datetime.combine(seven_days_ago, datetime.min.time()), Booking.room_id.in_(my_room_ids)).group_by('day').all()
-            bookings_map = {}
-            for b in bookings_by_day:
+            ).filter(
+                Booking.start_time >= datetime.combine(days_ago, datetime.min.time()),
+                Booking.room_id.in_(my_room_ids),
+                (Booking.status.in_(['confirmed', 'upcoming'])) | (Booking.status == None)
+            ).group_by('day').all()
+            confirmed_map = {}
+            for b in confirmed_by_day:
                 day_key = b[0]
                 if isinstance(day_key, str):
                     try:
@@ -211,13 +233,37 @@ def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie
                         day_key = dt_date.fromisoformat(day_key)
                     except ValueError:
                         pass
-                bookings_map[day_key] = b[1]
+                confirmed_map[day_key] = b[1]
+                
+            # Cancelled per day
+            cancelled_by_day = db.session.query(
+                func.date(func.coalesce(Booking.cancelled_at, Booking.start_time)).label('day'),
+                func.count(Booking.id)
+            ).filter(
+                func.coalesce(Booking.cancelled_at, Booking.start_time) >= datetime.combine(days_ago, datetime.min.time()),
+                Booking.room_id.in_(my_room_ids),
+                Booking.status == 'cancelled'
+            ).group_by('day').all()
+            cancelled_map = {}
+            for b in cancelled_by_day:
+                day_key = b[0]
+                if isinstance(day_key, str):
+                    try:
+                        from datetime import date as dt_date
+                        day_key = dt_date.fromisoformat(day_key)
+                    except ValueError:
+                        pass
+                cancelled_map[day_key] = b[1]
 
-            # Revenue (sum of booking total_price) per day in the last 7 days
+            # Revenue per day
             revenue_by_day = db.session.query(
                 func.date(Booking.start_time).label('day'),
                 func.sum(Booking.total_price)
-            ).filter(Booking.start_time >= datetime.combine(seven_days_ago, datetime.min.time()), Booking.room_id.in_(my_room_ids)).group_by('day').all()
+            ).filter(
+                Booking.start_time >= datetime.combine(days_ago, datetime.min.time()),
+                Booking.room_id.in_(my_room_ids),
+                (Booking.status.in_(['confirmed', 'upcoming'])) | (Booking.status == None)
+            ).group_by('day').all()
             revenue_map = {}
             for r in revenue_by_day:
                 day_key = r[0]
@@ -230,44 +276,36 @@ def admin_home(request: Request, admin_user = Depends(get_admin_user_from_cookie
                 revenue_map[day_key] = float(r[1] or 0.0)
 
             # Compile Chart.js datasets
-            chart_bookings = []
+            chart_confirmed = []
+            chart_cancelled = []
             chart_revenue = []
-            current_date = seven_days_ago
+            current_date = days_ago
             while current_date <= today:
-                chart_bookings.append(bookings_map.get(current_date, 0))
-                chart_revenue.append(round(revenue_map.get(current_date, 0.0), 2))
+                day_str = current_date.strftime('%Y-%m-%d')
+                chart_confirmed.append(confirmed_map.get(current_date) or confirmed_map.get(day_str) or 0)
+                chart_cancelled.append(cancelled_map.get(current_date) or cancelled_map.get(day_str) or 0)
+                chart_revenue.append(round(revenue_map.get(current_date) or revenue_map.get(day_str) or 0.0, 2))
                 current_date += timedelta(days=1)
-
-            # Recent activities for Space Manager (only bookings of their rooms)
-            recent_bookings = Booking.query.filter(Booking.room_id.in_(my_room_ids)).order_by(Booking.id.desc()).limit(5).all()
-            recent_events = []
-            for b in recent_bookings:
-                recent_events.append({
-                    'username': b.user.username if b.user else 'Inconnu',
-                    'description': f"Réservation salle {b.room.name if b.room else ''}",
-                    'date': b.start_time,
-                    'amount': b.total_price or 0.0,
-                    'type': 'booking'
-                })
         else:
             total_bookings = 0
             total_revenue = 0.0
             total_users = 0
-            chart_bookings = [0] * 30
-            chart_revenue = [0.0] * 30
-            recent_events = []
+            chart_confirmed = [0] * days
+            chart_cancelled = [0] * days
+            chart_revenue = [0.0] * days
 
     return templates.TemplateResponse(request, 'home.html', {
         "request": request, 
         "admin_user": admin_user,
+        "days": days,
         "total_users": total_users,
         "total_bookings": total_bookings,
         "total_locations": total_locations,
         "total_revenue": total_revenue,
         "chart_labels": chart_labels,
-        "chart_bookings": chart_bookings,
-        "chart_revenue": chart_revenue,
-        "recent_events": recent_events
+        "chart_confirmed": chart_confirmed,
+        "chart_cancelled": chart_cancelled,
+        "chart_revenue": chart_revenue
     })
 
 @admin_bp.get('/users', response_class=HTMLResponse)
@@ -346,7 +384,6 @@ async def create_user_admin(
     phone: str = Form(...),
     password: Optional[str] = Form(None),
     role: str = Form('user'),
-    balance: float = Form(0.0),
     admin_user = Depends(get_admin_user_from_cookie)
 ):
     if admin_user.role != 'admin':
@@ -371,7 +408,7 @@ async def create_user_admin(
             'email': email,
             'phone': phone,
             'role': role,
-            'balance': balance,
+            'balance': 0.0,
             'hashed_password': hash_password(password) if password else None,
             'auth_provider': 'local',
             'is_verified': True
@@ -429,9 +466,6 @@ async def create_room_admin(
     price_full_day: Optional[float] = Form(None),
     type_weekly: Optional[str] = Form(None),
     price_weekly: Optional[float] = Form(None),
-    custom_type_name: Optional[str] = Form(None),
-    custom_type_duration: Optional[int] = Form(None),
-    custom_type_price: Optional[float] = Form(None),
     image: UploadFile = File(None),
     admin_user = Depends(get_admin_user_from_cookie)
 ):
@@ -463,9 +497,6 @@ async def create_room_admin(
     if type_weekly == 'on' and price_weekly is not None:
         create_booking_type({'room_id': new_room.id, 'name': 'Week', 'duration_minutes': 3600, 'price': price_weekly, 'is_active': True})
         
-    if custom_type_name and custom_type_duration and custom_type_price is not None:
-        create_booking_type({'room_id': new_room.id, 'name': custom_type_name, 'duration_minutes': custom_type_duration, 'price': custom_type_price, 'is_active': True})
-    
     return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
 
 @admin_bp.post('/rooms/delete/{room_id}')
@@ -495,9 +526,6 @@ async def create_booking_type_admin(
     price_full_day: Optional[float] = Form(None),
     type_weekly: Optional[str] = Form(None),
     price_weekly: Optional[float] = Form(None),
-    custom_type_name: Optional[str] = Form(None),
-    custom_type_duration: Optional[int] = Form(None),
-    custom_type_price: Optional[float] = Form(None),
     admin_user = Depends(get_admin_user_from_cookie)
 ):
     """Ajouter des types de réservation à une salle (formulaire admin)."""
@@ -520,8 +548,45 @@ async def create_booking_type_admin(
     if type_weekly == 'on' and price_weekly is not None:
         create_booking_type({'room_id': room_id, 'name': 'Semaine', 'duration_minutes': 3600, 'price': price_weekly, 'is_active': True})
         
-    if custom_type_name and custom_type_duration and custom_type_price is not None:
-        create_booking_type({'room_id': room_id, 'name': custom_type_name, 'duration_minutes': custom_type_duration, 'price': custom_type_price, 'is_active': True})
+    return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
+
+
+@admin_bp.post('/rooms/{room_id}/edit')
+async def edit_room_admin(
+    request: Request,
+    room_id: int,
+    name: str = Form(...),
+    capacity: int = Form(...),
+    location_id: int = Form(...),
+    image: UploadFile = File(None),
+    admin_user = Depends(get_admin_user_from_cookie)
+):
+    """Modifier les informations d'une salle existante."""
+    from models.domain import Room
+
+    # Permission check for space manager
+    if admin_user.role == 'space_manager':
+        room = next((r for r in get_all_rooms() if r.id == room_id), None)
+        if room:
+            loc = next((l for l in get_all_locations() if l.id == room.location_id), None)
+            if not loc or loc.manager_id != admin_user.id:
+                return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
+
+    room = Room.query.get(room_id)
+    if not room:
+        return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
+
+    room.name = name
+    room.capacity = capacity
+    room.location_id = location_id
+
+    # Only update image if a new one is provided
+    if image and image.filename:
+        image_data = await image.read()
+        if image_data:
+            room.image_data = image_data
+
+    db.session.commit()
     return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
 
 
@@ -535,6 +600,29 @@ def delete_booking_type_admin(
     """Supprimer un type de réservation (formulaire admin)."""
     from services.booking_service import delete_booking_type
     delete_booking_type(type_id)
+    return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
+
+@admin_bp.post('/rooms/{room_id}/booking-types/{type_id}/edit')
+def edit_booking_type_admin(
+    request: Request,
+    room_id: int,
+    type_id: int,
+    name: str = Form(...),
+    price: float = Form(...),
+    admin_user = Depends(get_admin_user_from_cookie)
+):
+    from services.booking_service import update_booking_type
+    
+    # Verify permission
+    if admin_user.role == 'space_manager':
+        rooms = get_all_rooms()
+        room = next((r for r in rooms if r.id == room_id), None)
+        if room:
+            loc = next((l for l in get_all_locations() if l.id == room.location_id), None)
+            if not loc or loc.manager_id != admin_user.id:
+                return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
+                
+    update_booking_type(type_id, {'name': name, 'price': price})
     return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
 
 @admin_bp.post('/users/delete/{user_uid}')
@@ -561,6 +649,27 @@ def delete_location_admin(request: Request, location_id: int, admin_user = Depen
     if admin_user.role != 'admin':
         return RedirectResponse(url=request.url_for('locations_page'), status_code=303)
     delete_location(location_id)
+    return RedirectResponse(url=request.url_for('locations_page'), status_code=303)
+
+@admin_bp.post('/locations/edit/{location_id}')
+async def edit_location_admin(
+    request: Request, 
+    location_id: int, 
+    name: str = Form(...), 
+    manager_id: Optional[str] = Form(None), 
+    admin_user = Depends(get_admin_user_from_cookie)
+):
+    if admin_user.role != 'admin':
+        return RedirectResponse(url=request.url_for('locations_page'), status_code=303)
+        
+    from models.domain import Location
+    from db.database import db
+    loc = Location.query.get(location_id)
+    if loc:
+        loc.name = name
+        loc.manager_id = manager_id if manager_id else None
+        db.session.commit()
+        
     return RedirectResponse(url=request.url_for('locations_page'), status_code=303)
 
 @admin_bp.get('/users/{user_uid}', response_class=HTMLResponse)
@@ -594,8 +703,13 @@ def location_rooms(request: Request, location_id: int, admin_user = Depends(get_
     return templates.TemplateResponse(request, 'location_rooms.html', {"request": request, "location": location, "rooms": rooms, "admin_user": admin_user})
 
 @admin_bp.get('/bookings', response_class=HTMLResponse)
-def bookings_page(request: Request, search_email: Optional[str] = None, admin_user = Depends(get_admin_user_from_cookie)):
+def bookings_page(request: Request, 
+                  search_email: Optional[str] = None, 
+                  search_date: Optional[str] = None, 
+                  search_status: Optional[str] = None,
+                  admin_user = Depends(get_admin_user_from_cookie)):
     search_email = search_email.strip().lower() if search_email else ''
+    update_expired_bookings()  # Mettre à jour les statuts en BDD avant d'afficher
     bookings = get_all_bookings()
     
     if admin_user.role == 'space_manager':
@@ -605,27 +719,38 @@ def bookings_page(request: Request, search_email: Optional[str] = None, admin_us
         
     if search_email:
         bookings = [b for b in bookings if b.user and b.user.email and search_email in b.user.email.lower()]
-    return templates.TemplateResponse(request, 'bookings.html', {"request": request, "bookings": bookings, "admin_user": admin_user})
-
-@admin_bp.get('/recharges', response_class=HTMLResponse)
-def recharges_page(request: Request, admin_user = Depends(get_admin_user_from_cookie)):
-    if admin_user.role == 'space_manager':
-        # Recharges are typically global. If you want Space Managers to see recharges of their users:
-        my_locations = [loc.id for loc in get_all_locations() if loc.manager_id == admin_user.id]
-        my_rooms = [room.id for room in get_all_rooms() if room.location_id in my_locations]
-        my_user_ids = {b.user_id for b in get_all_bookings() if b.room_id in my_rooms}
-        recharges = [r for r in get_all_recharges() if r.user_id in my_user_ids]
-    else:
-        recharges = get_all_recharges()
         
-    # Trier par date décroissante pour voir les plus récentes en premier
-    recharges = sorted(recharges, key=lambda r: r.date, reverse=True)
-    return templates.TemplateResponse(request, 'recharges.html', {"request": request, "recharges": recharges, "admin_user": admin_user})
+    if search_date:
+        bookings = [b for b in bookings if b.start_time.strftime('%Y-%m-%d') == search_date]
+        
+    if search_status:
+        if search_status == 'confirmed':
+            bookings = [b for b in bookings if b.status in ['confirmed', 'upcoming', None]]
+        else:
+            bookings = [b for b in bookings if b.status == search_status]
+        
+    return templates.TemplateResponse(request, 'bookings.html', {
+        "request": request, 
+        "bookings": bookings, 
+        "admin_user": admin_user,
+        "now": datetime.utcnow()
+    })
+
+
 
 @admin_bp.get('/transactions', response_class=HTMLResponse)
-def transactions_page(request: Request, admin_user = Depends(get_admin_user_from_cookie)):
+def transactions_page(request: Request, 
+                      search_email: Optional[str] = None, 
+                      search_date: Optional[str] = None, 
+                      search_type: Optional[str] = None,
+                      admin_user = Depends(get_admin_user_from_cookie)):
     from models.domain import BalanceTransaction, Location, Room, Booking
     
+    query = BalanceTransaction.query
+    
+    if search_type:
+        query = query.filter(BalanceTransaction.type == search_type)
+        
     if admin_user.role == 'space_manager':
         # Space Manager sees only transactions of users who booked their locations
         my_locations = Location.query.filter_by(manager_id=admin_user.id).all()
@@ -637,13 +762,20 @@ def transactions_page(request: Request, admin_user = Depends(get_admin_user_from
         if my_room_ids:
             my_user_ids = {b.user_id for b in Booking.query.filter(Booking.room_id.in_(my_room_ids)).all()}
             if my_user_ids:
-                transactions = BalanceTransaction.query.filter(BalanceTransaction.user_id.in_(list(my_user_ids))).order_by(BalanceTransaction.created_at.desc()).all()
+                query = query.filter(BalanceTransaction.user_id.in_(list(my_user_ids)))
             else:
-                transactions = []
+                return templates.TemplateResponse(request, 'transactions.html', {"request": request, "transactions": [], "admin_user": admin_user})
         else:
-            transactions = []
-    else:
-        transactions = BalanceTransaction.query.order_by(BalanceTransaction.created_at.desc()).all()
+            return templates.TemplateResponse(request, 'transactions.html', {"request": request, "transactions": [], "admin_user": admin_user})
+            
+    transactions = query.order_by(BalanceTransaction.created_at.desc()).all()
+    
+    if search_email:
+        search_email = search_email.strip().lower()
+        transactions = [tx for tx in transactions if tx.user and tx.user.email and search_email in tx.user.email.lower()]
+        
+    if search_date:
+        transactions = [tx for tx in transactions if tx.created_at.strftime('%Y-%m-%d') == search_date]
         
     return templates.TemplateResponse(request, 'transactions.html', {"request": request, "transactions": transactions, "admin_user": admin_user})
 
@@ -718,5 +850,205 @@ def admin_profile_update(
         "request": request, 
         "admin_user": admin_user, 
         "success": "Profil mis à jour avec succès"
+    })
+
+@admin_bp.get('/revenue_stats', response_class=HTMLResponse)
+def revenue_stats_page(request: Request, days: int = 7, admin_user = Depends(get_admin_user_from_cookie)):
+    from models.domain import Booking, Location, Room
+    
+    if days not in [7, 30, 90]:
+        days = 7
+
+    today = datetime.utcnow().date()
+    days_ago = today - timedelta(days=days-1)
+
+    chart_labels = []
+    current_date = days_ago
+    while current_date <= today:
+        chart_labels.append(current_date.strftime('%d/%m'))
+        current_date += timedelta(days=1)
+
+    my_location_ids = []
+    if admin_user.role == 'space_manager':
+        my_locations = Location.query.filter_by(manager_id=admin_user.id).all()
+        my_location_ids = [loc.id for loc in my_locations]
+    else:
+        my_locations = Location.query.all()
+        my_location_ids = [loc.id for loc in my_locations]
+
+    my_rooms = Room.query.filter(Room.location_id.in_(my_location_ids)).all() if my_location_ids else []
+    my_room_ids = [room.id for room in my_rooms]
+
+    if my_room_ids:
+        confirmed_by_day = db.session.query(
+            func.date(Booking.start_time).label('day'),
+            func.count(Booking.id)
+        ).filter(
+            Booking.start_time >= datetime.combine(days_ago, datetime.min.time()),
+            Booking.room_id.in_(my_room_ids),
+            (Booking.status.in_(['confirmed', 'upcoming'])) | (Booking.status == None)
+        ).group_by('day').all()
+        confirmed_map = { (b[0] if not isinstance(b[0], str) else datetime.strptime(b[0], '%Y-%m-%d').date()): b[1] for b in confirmed_by_day }
+
+        cancelled_by_day = db.session.query(
+            func.date(func.coalesce(Booking.cancelled_at, Booking.start_time)).label('day'),
+            func.count(Booking.id)
+        ).filter(
+            func.coalesce(Booking.cancelled_at, Booking.start_time) >= datetime.combine(days_ago, datetime.min.time()),
+            Booking.room_id.in_(my_room_ids),
+            Booking.status == 'cancelled'
+        ).group_by('day').all()
+        cancelled_map = { (b[0] if not isinstance(b[0], str) else datetime.strptime(b[0], '%Y-%m-%d').date()): b[1] for b in cancelled_by_day }
+
+        revenue_by_day = db.session.query(
+            func.date(Booking.start_time).label('day'),
+            func.sum(Booking.total_price)
+        ).filter(
+            Booking.start_time >= datetime.combine(days_ago, datetime.min.time()),
+            Booking.room_id.in_(my_room_ids),
+            (Booking.status.in_(['confirmed', 'upcoming'])) | (Booking.status == None)
+        ).group_by('day').all()
+        revenue_map = { (r[0] if not isinstance(r[0], str) else datetime.strptime(r[0], '%Y-%m-%d').date()): float(r[1] or 0.0) for r in revenue_by_day }
+
+        chart_confirmed = []
+        chart_cancelled = []
+        chart_revenue = []
+        current_date = days_ago
+        while current_date <= today:
+            day_str = current_date.strftime('%Y-%m-%d')
+            chart_confirmed.append(confirmed_map.get(current_date) or confirmed_map.get(day_str) or 0)
+            chart_cancelled.append(cancelled_map.get(current_date) or cancelled_map.get(day_str) or 0)
+            chart_revenue.append(round(revenue_map.get(current_date) or revenue_map.get(day_str) or 0.0, 2))
+            current_date += timedelta(days=1)
+    else:
+        chart_confirmed = [0] * days
+        chart_cancelled = [0] * days
+        chart_revenue = [0.0] * days
+
+    locations_stats = []
+    for loc in my_locations:
+        loc_data = {
+            'id': loc.id,
+            'name': loc.name,
+            'total_revenue': 0.0,
+            'rooms': []
+        }
+        for room in loc.rooms:
+            room_revenue_val = db.session.query(func.sum(Booking.total_price)).filter(
+                Booking.room_id == room.id,
+                Booking.start_time >= datetime.combine(days_ago, datetime.min.time()),
+                (Booking.status.in_(['confirmed', 'upcoming'])) | (Booking.status == None)
+            ).scalar() or 0.0
+            
+            room_revenue = round(room_revenue_val, 2)
+            
+            loc_data['rooms'].append({
+                'id': room.id,
+                'name': room.name,
+                'revenue': room_revenue
+            })
+            loc_data['total_revenue'] += room_revenue
+            
+        loc_data['total_revenue'] = round(loc_data['total_revenue'], 2)
+        locations_stats.append(loc_data)
+
+    # --- KPI STATS ---
+    total_rev_current = sum(chart_revenue)
+    total_conf_current = sum(chart_confirmed)
+    total_canc_current = sum(chart_cancelled)
+    
+    total_all_current = total_conf_current + total_canc_current
+    cancel_rate_current = round((total_canc_current / total_all_current * 100) if total_all_current > 0 else 0)
+    avg_rev_current = round((total_rev_current / total_conf_current) if total_conf_current > 0 else 0)
+    
+    # Previous period
+    prev_days_ago = days_ago - timedelta(days=days)
+    prev_end_date = days_ago - timedelta(days=1)
+    
+    if my_room_ids:
+        prev_conf_val = db.session.query(func.count(Booking.id)).filter(
+            Booking.start_time >= datetime.combine(prev_days_ago, datetime.min.time()),
+            Booking.start_time <= datetime.combine(prev_end_date, datetime.max.time()),
+            Booking.room_id.in_(my_room_ids),
+            (Booking.status.in_(['confirmed', 'upcoming'])) | (Booking.status == None)
+        ).scalar() or 0
+        
+        prev_canc_val = db.session.query(func.count(Booking.id)).filter(
+            func.coalesce(Booking.cancelled_at, Booking.start_time) >= datetime.combine(prev_days_ago, datetime.min.time()),
+            func.coalesce(Booking.cancelled_at, Booking.start_time) <= datetime.combine(prev_end_date, datetime.max.time()),
+            Booking.room_id.in_(my_room_ids),
+            Booking.status == 'cancelled'
+        ).scalar() or 0
+        
+        prev_rev_val = db.session.query(func.sum(Booking.total_price)).filter(
+            Booking.start_time >= datetime.combine(prev_days_ago, datetime.min.time()),
+            Booking.start_time <= datetime.combine(prev_end_date, datetime.max.time()),
+            Booking.room_id.in_(my_room_ids),
+            (Booking.status.in_(['confirmed', 'upcoming'])) | (Booking.status == None)
+        ).scalar() or 0.0
+    else:
+        prev_conf_val = 0
+        prev_canc_val = 0
+        prev_rev_val = 0.0
+
+    total_all_prev = prev_conf_val + prev_canc_val
+    cancel_rate_prev = round((prev_canc_val / total_all_prev * 100) if total_all_prev > 0 else 0)
+    avg_rev_prev = round((prev_rev_val / prev_conf_val) if prev_conf_val > 0 else 0)
+
+    # % Variations
+    def calc_variation(curr, prev):
+        if prev == 0:
+            return 100 if curr > 0 else 0
+        return round(((curr - prev) / prev) * 100)
+
+    # Salle la plus réservée dans tout le réseau
+    top_room_booking = db.session.query(
+        Booking.room_id, 
+        func.count(Booking.id).label('booking_count')
+    ).filter(
+        Booking.room_id.in_(my_room_ids),
+        (Booking.status.in_(['confirmed', 'upcoming'])) | (Booking.status == None)
+    ).group_by(Booking.room_id).order_by(desc('booking_count')).first()
+    
+    top_room = None
+    if top_room_booking:
+        r_obj = next((r for r in my_rooms if r.id == top_room_booking[0]), None)
+        if r_obj:
+            top_room = {
+                'name': r_obj.name,
+                'count': top_room_booking[1],
+                'location': r_obj.location.name if r_obj.location else ""
+            }
+
+    kpi = {
+        'top_room': top_room,
+        'revenue': {
+            'value': round(total_rev_current),
+            'variation': calc_variation(total_rev_current, prev_rev_val)
+        },
+        'bookings': {
+            'value': total_conf_current,
+            'variation': calc_variation(total_conf_current, prev_conf_val)
+        },
+        'cancel_rate': {
+            'value': cancel_rate_current,
+            'is_good': cancel_rate_current <= 15
+        },
+        'avg_revenue': {
+            'value': avg_rev_current,
+            'variation': calc_variation(avg_rev_current, avg_rev_prev)
+        }
+    }
+
+    return templates.TemplateResponse(request, 'revenue_stats.html', {
+        "request": request,
+        "admin_user": admin_user,
+        "days": days,
+        "chart_labels": chart_labels,
+        "chart_confirmed": chart_confirmed,
+        "chart_cancelled": chart_cancelled,
+        "chart_revenue": chart_revenue,
+        "locations_stats": locations_stats,
+        "kpi": kpi
     })
 

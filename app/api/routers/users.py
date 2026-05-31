@@ -165,8 +165,8 @@ def get_user_by_email_route(email: str, current_user: dict = Depends(get_current
 def update_password_route(data: UpdatePasswordRequest, current_user: dict = Depends(get_current_user)):
     resp, code = update_password_logic(
         uid=current_user["uid"],
-        old_password=data.old_password,
-        new_password=data.new_password
+        new_password=data.new_password,
+        old_password=data.old_password
         )
     return JSONResponse(content=resp, status_code=code)
 

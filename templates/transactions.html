@@ -6,6 +6,30 @@
 {% block page_title %}Journal des Transactions{% endblock %}
 
 {% block content %}
+        <div class="premium-card mb-4">
+            <form method="get" class="form-row align-items-center">
+                <div class="col-md-3 col-sm-12 mb-2 mb-md-0">
+                    <div class="search-wrapper"><i class="fas fa-search text-muted mr-3"></i><input type="text" name="search_email" class="form-control search-input" placeholder="Email..." value="{{ request.query_params.get('search_email', '') }}"></div>
+                </div>
+                <div class="col-md-3 col-sm-12 mb-2 mb-md-0">
+                    <div class="search-wrapper"><i class="fas fa-calendar-alt text-muted mr-3"></i><input type="date" name="search_date" class="form-control search-input" value="{{ request.query_params.get('search_date', '') }}"></div>
+                </div>
+                <div class="col-md-3 col-sm-12 mb-2 mb-md-0">
+                    <div class="search-wrapper">
+                        <i class="fas fa-list text-muted mr-3"></i>
+                        <select name="search_type" class="form-control border-0 p-0 shadow-none bg-transparent">
+                            <option value="">Tous les types</option>
+                            <option value="recharge" {% if request.query_params.get('search_type') == 'recharge' %}selected{% endif %}>Recharge</option>
+                            <option value="booking" {% if request.query_params.get('search_type') == 'booking' %}selected{% endif %}>Réservation</option>
+                            <option value="cancellation" {% if request.query_params.get('search_type') == 'cancellation' %}selected{% endif %}>Annulation</option>
+                            <option value="refund" {% if request.query_params.get('search_type') == 'refund' %}selected{% endif %}>Remboursement</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-12"><button type="submit" class="btn-premium btn-search w-100">Filtrer</button></div>
+            </form>
+        </div>
+
         <div class="table-responsive">
             <table class="table">
                 <thead>

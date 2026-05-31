@@ -45,13 +45,56 @@
                         <a href="{{ url_for('location_rooms', location_id=location.id) }}" class="btn-rooms">Voir les
                             salles <i class="fas fa-chevron-right ml-1"></i></a>
                         {% if admin_user.role == 'admin' %}
-                        <form action="{{ url_for('delete_location_admin', location_id=location.id) }}" method="POST"
-                            onsubmit="return confirm('Supprimer ?');"><button type="submit" class="action-btn btn-delete"><i
-                                    class="fas fa-trash-alt"></i></button></form>
+                        <div class="d-flex">
+                            <button type="button" class="action-btn btn-edit mr-2" data-toggle="modal" data-target="#modalEditLocation{{ location.id }}" title="Modifier"><i class="fas fa-edit"></i></button>
+                            <form action="{{ url_for('delete_location_admin', location_id=location.id) }}" method="POST"
+                                onsubmit="return confirm('Supprimer ?');"><button type="submit" class="action-btn btn-delete"><i
+                                        class="fas fa-trash-alt"></i></button></form>
+                        </div>
                         {% endif %}
                     </div>
                 </div>
             </div>
             {% endfor %}
         </div>
+
+        {% if admin_user.role == 'admin' %}
+        {% for location in locations %}
+        <div class="modal fade" id="modalEditLocation{{ location.id }}" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content" style="background: var(--card-bg, #1e1e2e); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;">
+                    <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <h5 class="modal-title font-weight-bold text-white">
+                            <i class="fas fa-edit mr-2" style="color: var(--primary);"></i> Modifier : {{ location.name }}
+                        </h5>
+                        <button type="button" class="close text-white" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <form action="/admin/locations/edit/{{ location.id }}" method="POST">
+                            <div class="form-group">
+                                <label class="small font-weight-bold text-light">Nom de la location</label>
+                                <input type="text" name="name" class="form-control" value="{{ location.name }}" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="small font-weight-bold text-light">Responsable (Space Manager)</label>
+                                <select name="manager_id" class="form-control">
+                                    <option value="">-- Aucun --</option>
+                                    {% for m in managers %}
+                                    <option value="{{ m.id }}" {% if location.manager_id == m.id %}selected{% endif %}>{{ m.username }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="d-flex justify-content-end mt-4">
+                                <button type="submit" class="btn-premium btn-add px-4">Enregistrer</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+
 {% endblock %}

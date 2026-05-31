@@ -29,8 +29,6 @@
                             <option value="space_manager">Space Manager</option>
                             <option value="admin">Administrateur</option>
                         </select></div>
-                    <div class="col-md-3 col-sm-6 mb-3" id="balance-section"><input type="number" step="0.01"
-                            name="balance" class="form-control" placeholder="Solde Initial" value="0.0"></div>
                     <div class="col-md-4 mb-3" id="locations-section" style="display: none;"><select name="location_ids"
                             class="form-control" multiple>{% for loc in locations %}<option value="{{ loc.id }}">{{
                                 loc.name }}</option>{% endfor %}</select></div>
@@ -73,7 +71,7 @@
                         <td class="user-email text-nowrap">{{ user.email }}</td>
                         <td>
                             {% if user.role == 'admin' %}<span class="role-badge badge-admin">Admin</span>
-                            {% elif user.role == 'space_manager' %}<span class="role-badge badge-manager">Manager</span>
+                            {% elif user.role == 'space_manager' %}<span class="role-badge badge-manager">Space Manager</span>
                             {% else %}<span class="role-badge badge-user">User</span>{% endif %}
                         </td>
                         <td class="font-weight-bold text-primary text-nowrap">{{ user.balance }} DA</td>
@@ -96,10 +94,9 @@
         const roleSelect = document.getElementById('role-select');
         if (roleSelect) {
             roleSelect.addEventListener('change', function () {
-                var ls = document.getElementById('locations-section'), bs = document.getElementById('balance-section');
-                if (this.value === 'space_manager') { ls.style.display = 'block'; bs.style.display = 'none'; }
-                else if (this.value === 'admin') { ls.style.display = 'none'; bs.style.display = 'none'; }
-                else { ls.style.display = 'none'; bs.style.display = 'block'; }
+                var ls = document.getElementById('locations-section');
+                if (this.value === 'space_manager') { ls.style.display = 'block'; }
+                else { ls.style.display = 'none'; }
             });
         }
         

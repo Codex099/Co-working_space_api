@@ -32,7 +32,7 @@
                                 <div class="col-md-4 col-sm-6 mb-3"><label class="small font-weight-bold text-light">Nom</label><input type="text" name="name" class="form-control" required></div>
                                 <div class="col-md-2 col-sm-6 mb-3"><label class="small font-weight-bold text-light">Capacité</label><input type="number" name="capacity" class="form-control" required></div>
                                 <div class="col-md-3 col-sm-12 mb-3"><label class="small font-weight-bold text-light">Location</label><select name="location_id" class="form-control" required>{% for location in locations %}<option value="{{ location.id }}">{{ location.name }}</option>{% endfor %}</select></div>
-                                <div class="col-md-3 col-sm-12 mb-3"><label class="small font-weight-bold text-light">Image</label><input type="file" name="image" class="form-control-file p-1" accept="image/*"></div>
+                                <div class="col-md-3 col-sm-12 mb-3"><label class="small font-weight-bold text-light">Image *</label><input type="file" name="image" class="form-control-file p-1" accept="image/*" required></div>
                             </div>
                             
                             <h6 class="font-weight-bold small text-uppercase text-light mt-2 mb-3 border-top pt-3">1. Types prédéfinis</h6>
@@ -67,12 +67,10 @@
                                 </div>
                             </div>
 
-                            <h6 class="font-weight-bold small text-uppercase text-light mt-2 mb-3 border-top pt-3">2. Type personnalisé (Optionnel)</h6>
-                            <div class="row">
-                                <div class="col-md-4 mb-3"><label class="small font-weight-bold text-light">Nom du type</label><input type="text" name="custom_type_name" class="form-control" placeholder="ex: Soirée"></div>
-                                <div class="col-md-3 mb-3"><label class="small font-weight-bold text-light">Durée (minutes)</label><input type="number" name="custom_type_duration" class="form-control" placeholder="ex: 240"></div>
-                                <div class="col-md-3 mb-3"><label class="small font-weight-bold text-light">Prix (DA)</label><input type="number" step="0.01" name="custom_type_price" class="form-control" placeholder="ex: 3000"></div>
-                                <div class="col-md-2 d-flex align-items-end mb-3"><button type="submit" class="btn-premium btn-add w-100">Ajouter</button></div>
+                            <div class="row mt-4">
+                                <div class="col-md-12 d-flex justify-content-end">
+                                    <button type="submit" class="btn-premium btn-add px-5">Ajouter la salle</button>
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -138,9 +136,17 @@
                         </td>
                         <td class="text-nowrap">{{ room.location.name }}</td>
                         <td class="text-center text-nowrap">
-                            <!-- Bouton gérer types -->
+                            <!-- Bouton modifier salle -->
                             <button type="button" class="action-btn btn-edit mr-1"
+                                    title="Modifier la salle"
+                                    data-toggle="modal"
+                                    data-target="#modalEditRoom{{ room.id }}">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <!-- Bouton gérer types -->
+                            <button type="button" class="action-btn mr-1"
                                     title="Gérer les types"
+                                    style="background: rgba(99,102,241,0.15); color:#6366f1; border:none; padding:6px 10px; border-radius:8px; cursor:pointer;"
                                     data-toggle="modal"
                                     data-target="#modalTypes{{ room.id }}">
                                 <i class="fas fa-tags"></i>
@@ -156,105 +162,43 @@
             </table>
         </div>
 
-        <!-- ── Modals gestion types (un par salle) ───────────────── -->
+        <!-- ── Modals édition de salle (un par salle) ──────────────── -->
         {% for room in rooms %}
-        <div class="modal fade" id="modalTypes{{ room.id }}" tabindex="-1" role="dialog"
-             aria-labelledby="modalTypesLabel{{ room.id }}" aria-hidden="true">
+        <div class="modal fade" id="modalEditRoom{{ room.id }}" tabindex="-1" role="dialog" aria-hidden="true">
             <div class="modal-dialog modal-lg" role="document">
-                <div class="modal-content" style="background: var(--card-bg, #1e1e2e); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;">
-
-                    <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.1);">
-                        <h5 class="modal-title font-weight-bold text-white" id="modalTypesLabel{{ room.id }}">
-                            <i class="fas fa-tags mr-2" style="color: var(--primary);"></i>
-                            Types de réservation — {{ room.name }}
+                <div class="modal-content" style="border-radius: 12px; overflow: hidden;">
+                    <div class="modal-header bg-light">
+                        <h5 class="modal-title font-weight-bold">
+                            <i class="fas fa-door-open mr-2 text-primary"></i> Modifier : {{ room.name }}
                         </h5>
-                        <button type="button" class="close text-white" data-dismiss="modal">
-                            <span>&times;</span>
-                        </button>
+                        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
                     </div>
-
                     <div class="modal-body">
-
-                        <!-- Liste des types existants -->
-                        {% if room.booking_types %}
-                        <table class="table table-sm mb-4">
-                            <thead>
-                                <tr>
-                                    <th>Nom</th>
-                                    <th>Durée</th>
-                                    <th>Prix</th>
-                                    <th class="text-center">Supprimer</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for bt in room.booking_types %}
-                                <tr>
-                                    <td class="font-weight-bold text-light">{{ bt.name }}</td>
-                                    <td class="text-light">{{ bt.duration_minutes }} min
-                                        {% if bt.duration_minutes == 60 %}<small class="text-muted">(1h)</small>
-                                        {% elif bt.duration_minutes == 300 %}<small class="text-muted">(demi-journée)</small>
-                                        {% elif bt.duration_minutes == 720 %}<small class="text-muted">(journée)</small>
-                                        {% elif bt.duration_minutes >= 2880 %}<small class="text-muted">(semaine)</small>
-                                        {% endif %}
-                                    </td>
-                                    <td><span class="price-badge">{{ bt.price }} DA</span></td>
-                                    <td class="text-center">
-                                        <form action="/admin/rooms/{{ room.id }}/booking-types/{{ bt.id }}/delete"
-                                              method="POST"
-                                              onsubmit="return confirm('Supprimer ce type ?');">
-                                            <button type="submit" class="action-btn btn-delete">
-                                                <i class="fas fa-trash-alt"></i>
-                                            </button>
-                                        </form>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                        {% else %}
-                        <p class="text-muted small mb-4"><i class="fas fa-info-circle mr-1"></i> Aucun type défini pour cette salle.</p>
-                        {% endif %}
-
-                        <!-- Formulaire ajout nouveau type -->
-                        <form action="/admin/rooms/{{ room.id }}/booking-types" method="POST">
-                            <h6 class="font-weight-bold small text-uppercase text-light mt-2 mb-3 border-top pt-3">1. Ajouter un type prédéfini</h6>
-                            <div class="row mb-3">
-                                <div class="col-md-3">
-                                    <div class="custom-control custom-checkbox mb-2">
-                                        <input type="checkbox" class="custom-control-input" id="checkHourly{{ room.id }}" name="type_hourly" onchange="document.getElementById('priceHourly{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceHourly{{ room.id }}').required = true; else document.getElementById('priceHourly{{ room.id }}').required = false;">
-                                        <label class="custom-control-label font-weight-bold small text-light" for="checkHourly{{ room.id }}">1 Heure</label>
-                                    </div>
-                                    <input type="number" step="0.01" id="priceHourly{{ room.id }}" name="price_hourly" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                        <form action="/admin/rooms/{{ room.id }}/edit" method="POST" enctype="multipart/form-data">
+                            <div class="row">
+                                <div class="col-md-4 col-sm-6 mb-3">
+                                    <label class="small font-weight-bold">Nom</label>
+                                    <input type="text" name="name" class="form-control" value="{{ room.name }}" required>
                                 </div>
-                                <div class="col-md-3">
-                                    <div class="custom-control custom-checkbox mb-2">
-                                        <input type="checkbox" class="custom-control-input" id="checkHalfDay{{ room.id }}" name="type_half_day" onchange="document.getElementById('priceHalfDay{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceHalfDay{{ room.id }}').required = true; else document.getElementById('priceHalfDay{{ room.id }}').required = false;">
-                                        <label class="custom-control-label font-weight-bold small text-light" for="checkHalfDay{{ room.id }}">Demi-journée (5h)</label>
-                                    </div>
-                                    <input type="number" step="0.01" id="priceHalfDay{{ room.id }}" name="price_half_day" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                                <div class="col-md-2 col-sm-6 mb-3">
+                                    <label class="small font-weight-bold">Capacité</label>
+                                    <input type="number" name="capacity" class="form-control" value="{{ room.capacity }}" required>
                                 </div>
-                                <div class="col-md-3">
-                                    <div class="custom-control custom-checkbox mb-2">
-                                        <input type="checkbox" class="custom-control-input" id="checkFullDay{{ room.id }}" name="type_full_day" onchange="document.getElementById('priceFullDay{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceFullDay{{ room.id }}').required = true; else document.getElementById('priceFullDay{{ room.id }}').required = false;">
-                                        <label class="custom-control-label font-weight-bold small text-light" for="checkFullDay{{ room.id }}">Journée (12h)</label>
-                                    </div>
-                                    <input type="number" step="0.01" id="priceFullDay{{ room.id }}" name="price_full_day" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                                <div class="col-md-3 col-sm-12 mb-3">
+                                    <label class="small font-weight-bold">Location</label>
+                                    <select name="location_id" class="form-control" required>
+                                        {% for location in locations %}
+                                        <option value="{{ location.id }}" {% if location.id == room.location_id %}selected{% endif %}>{{ location.name }}</option>
+                                        {% endfor %}
+                                    </select>
                                 </div>
-                                <div class="col-md-3">
-                                    <div class="custom-control custom-checkbox mb-2">
-                                        <input type="checkbox" class="custom-control-input" id="checkWeekly{{ room.id }}" name="type_weekly" onchange="document.getElementById('priceWeekly{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceWeekly{{ room.id }}').required = true; else document.getElementById('priceWeekly{{ room.id }}').required = false;">
-                                        <label class="custom-control-label font-weight-bold small text-light" for="checkWeekly{{ room.id }}">Semaine (5j)</label>
-                                    </div>
-                                    <input type="number" step="0.01" id="priceWeekly{{ room.id }}" name="price_weekly" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                                <div class="col-md-3 col-sm-12 mb-3">
+                                    <label class="small font-weight-bold">Nouvelle image <small class="text-muted">(optionnel)</small></label>
+                                    <input type="file" name="image" class="form-control-file p-1" accept="image/*">
                                 </div>
                             </div>
-
-                            <h6 class="font-weight-bold small text-uppercase text-light mt-2 mb-3 border-top pt-3">2. Ou un type personnalisé</h6>
-                            <div class="row">
-                                <div class="col-md-4 mb-3"><label class="small font-weight-bold text-light">Nom du type</label><input type="text" name="custom_type_name" class="form-control" placeholder="ex: Soirée"></div>
-                                <div class="col-md-3 mb-3"><label class="small font-weight-bold text-light">Durée (minutes)</label><input type="number" name="custom_type_duration" class="form-control" placeholder="ex: 240"></div>
-                                <div class="col-md-3 mb-3"><label class="small font-weight-bold text-light">Prix (DA)</label><input type="number" step="0.01" name="custom_type_price" class="form-control" placeholder="ex: 3000"></div>
-                                <div class="col-md-2 d-flex align-items-end mb-3"><button type="submit" class="btn-premium btn-add w-100">Ajouter</button></div>
+                            <div class="d-flex justify-content-end mt-3">
+                                <button type="submit" class="btn-premium btn-add px-5">Enregistrer</button>
                             </div>
                         </form>
                     </div>
@@ -263,34 +207,156 @@
         </div>
         {% endfor %}
 
+        <!-- ── Modals gestion types (un par salle) ───────────────── -->
+        {% for room in rooms %}
+        <div class="modal fade" id="modalTypes{{ room.id }}" tabindex="-1" role="dialog"
+             aria-labelledby="modalTypesLabel{{ room.id }}" aria-hidden="true">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content" style="border-radius: 12px; overflow: hidden;">
+
+                    <div class="modal-header bg-light">
+                        <h5 class="modal-title font-weight-bold" id="modalTypesLabel{{ room.id }}">
+                            <i class="fas fa-tags mr-2 text-primary"></i>
+                            Types de réservation — {{ room.name }}
+                        </h5>
+                        <button type="button" class="close" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+
+                    <div class="modal-body">
+
+                        <!-- Types existants en cards -->
+                        {% if room.booking_types %}
+                        <div class="row mb-4">
+                            {% for bt in room.booking_types %}
+                            <div class="col-md-6 mb-3">
+                                <div class="p-3 border rounded d-flex justify-content-between align-items-center"
+                                     style="background:#f8f9fa;">
+                                    <div>
+                                        <div class="font-weight-bold text-dark">{{ bt.name }}</div>
+                                        <small class="text-muted">{{ bt.duration_minutes }} min • <strong class="text-success">{{ bt.price }} DA</strong></small>
+                                    </div>
+                                    <div class="d-flex">
+                                        <button type="button" class="action-btn btn-edit mr-2"
+                                                onclick="openEditTypeModal('modalTypes{{ room.id }}', 'modalEditType{{ bt.id }}')"
+                                                title="Modifier">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <form action="/admin/rooms/{{ room.id }}/booking-types/{{ bt.id }}/delete"
+                                              method="POST"
+                                              onsubmit="return confirm('Supprimer ce type ?');">
+                                            <button type="submit" class="action-btn btn-delete">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted small mb-4"><i class="fas fa-info-circle mr-1"></i> Aucun type défini pour cette salle.</p>
+                        {% endif %}
+
+                        <!-- Formulaire ajout nouveau type -->
+                        <form action="/admin/rooms/{{ room.id }}/booking-types" method="POST">
+                            <h6 class="font-weight-bold small text-uppercase text-secondary mt-2 mb-3 border-top pt-3">1. Ajouter un type prédéfini</h6>
+                            <div class="row mb-3">
+                                <div class="col-md-3 mb-2">
+                                    <div class="custom-control custom-checkbox mb-2">
+                                        <input type="checkbox" class="custom-control-input" id="checkHourly{{ room.id }}" name="type_hourly" onchange="document.getElementById('priceHourly{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceHourly{{ room.id }}').required = true; else document.getElementById('priceHourly{{ room.id }}').required = false;">
+                                        <label class="custom-control-label font-weight-bold small text-dark" for="checkHourly{{ room.id }}">1 Heure</label>
+                                    </div>
+                                    <input type="number" step="0.01" id="priceHourly{{ room.id }}" name="price_hourly" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <div class="custom-control custom-checkbox mb-2">
+                                        <input type="checkbox" class="custom-control-input" id="checkHalfDay{{ room.id }}" name="type_half_day" onchange="document.getElementById('priceHalfDay{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceHalfDay{{ room.id }}').required = true; else document.getElementById('priceHalfDay{{ room.id }}').required = false;">
+                                        <label class="custom-control-label font-weight-bold small text-dark" for="checkHalfDay{{ room.id }}">Demi-journée (5h)</label>
+                                    </div>
+                                    <input type="number" step="0.01" id="priceHalfDay{{ room.id }}" name="price_half_day" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <div class="custom-control custom-checkbox mb-2">
+                                        <input type="checkbox" class="custom-control-input" id="checkFullDay{{ room.id }}" name="type_full_day" onchange="document.getElementById('priceFullDay{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceFullDay{{ room.id }}').required = true; else document.getElementById('priceFullDay{{ room.id }}').required = false;">
+                                        <label class="custom-control-label font-weight-bold small text-dark" for="checkFullDay{{ room.id }}">Journée (12h)</label>
+                                    </div>
+                                    <input type="number" step="0.01" id="priceFullDay{{ room.id }}" name="price_full_day" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <div class="custom-control custom-checkbox mb-2">
+                                        <input type="checkbox" class="custom-control-input" id="checkWeekly{{ room.id }}" name="type_weekly" onchange="document.getElementById('priceWeekly{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceWeekly{{ room.id }}').required = true; else document.getElementById('priceWeekly{{ room.id }}').required = false;">
+                                        <label class="custom-control-label font-weight-bold small text-dark" for="checkWeekly{{ room.id }}">Semaine (5j)</label>
+                                    </div>
+                                    <input type="number" step="0.01" id="priceWeekly{{ room.id }}" name="price_weekly" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
+                                </div>
+                            </div>
+
+                            <div class="row mt-4">
+                                <div class="col-md-12 d-flex justify-content-end">
+                                    <button type="submit" class="btn-premium btn-add px-5">Ajouter les types</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- ── Modals édition de types (un par type) ───────────────── -->
+        {% for room in rooms %}
+            {% for bt in room.booking_types %}
+            <div class="modal fade" id="modalEditType{{ bt.id }}" tabindex="-1" role="dialog" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content" style="border-radius: 12px; overflow: hidden;">
+                        <div class="modal-header bg-light">
+                            <h5 class="modal-title font-weight-bold">
+                                <i class="fas fa-edit mr-2 text-primary"></i> Modifier : {{ bt.name }}
+                            </h5>
+                            <button type="button" class="close" data-dismiss="modal">
+                                <span>&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <form action="/admin/rooms/{{ room.id }}/booking-types/{{ bt.id }}/edit" method="POST">
+                                <div class="form-group">
+                                    <label class="small font-weight-bold">Nom du type</label>
+                                    <input type="text" name="name" class="form-control" value="{{ bt.name }}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="small font-weight-bold">Prix (DA)</label>
+                                    <input type="number" step="0.01" name="price" class="form-control" value="{{ bt.price }}" required>
+                                </div>
+                                <div class="d-flex justify-content-end mt-4">
+                                    <button type="submit" class="btn-premium btn-add px-4">Sauvegarder</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% endfor %}
+
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-// Gestion durée personnalisée
-document.querySelectorAll('select[name="duration_minutes"]').forEach(function(select) {
-    select.addEventListener('change', function() {
-        var roomId = this.closest('form').getAttribute('action').split('/')[3];
-        var customInput = document.getElementById('customDuration' + roomId);
-        if (this.value === 'custom') {
-            customInput.classList.remove('d-none');
-            customInput.required = true;
-        } else {
-            customInput.classList.add('d-none');
-            customInput.required = false;
-        }
-    });
-});
+/**
+ * Fix Bootstrap 4 nested modal issue:
+ * Close the current modal first, then open the edit modal after transition ends.
+ */
+function openEditTypeModal(currentModalId, editModalId) {
+    var currentModal = $('#' + currentModalId);
+    var editModal = $('#' + editModalId);
 
-// Remplacer duration_minutes par la valeur custom si saisie
-document.querySelectorAll('form[action*="booking-types"]').forEach(function(form) {
-    form.addEventListener('submit', function(e) {
-        var select = form.querySelector('select[name="duration_minutes"]');
-        var customInput = form.querySelector('input[name="duration_custom"]');
-        if (select && select.value === 'custom' && customInput && customInput.value) {
-            select.value = customInput.value;
-        }
+    currentModal.on('hidden.bs.modal.editfix', function () {
+        currentModal.off('hidden.bs.modal.editfix');
+        editModal.modal('show');
     });
-});
+    currentModal.modal('hide');
+}
 </script>
 {% endblock %}
