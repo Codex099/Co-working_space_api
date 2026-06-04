@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Form, File, UploadFile, Depends, Response
+from fastapi import APIRouter, Request, Form, File, UploadFile, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from typing import Optional
@@ -489,13 +489,13 @@ async def create_room_admin(
     
     # 2. Créer les types de réservation sélectionnés
     if type_hourly == 'on' and price_hourly is not None:
-        create_booking_type({'room_id': new_room.id, 'name': '1 Hour', 'duration_minutes': 60, 'price': price_hourly, 'is_active': True})
+        create_booking_type({'room_id': new_room.id, 'name': 'By Hour', 'duration_minutes': 60, 'price': price_hourly, 'is_active': True})
     if type_half_day == 'on' and price_half_day is not None:
-        create_booking_type({'room_id': new_room.id, 'name': 'Half-day', 'duration_minutes': 300, 'price': price_half_day, 'is_active': True})
+        create_booking_type({'room_id': new_room.id, 'name': 'By Half-Day', 'duration_minutes': 300, 'price': price_half_day, 'is_active': True})
     if type_full_day == 'on' and price_full_day is not None:
-        create_booking_type({'room_id': new_room.id, 'name': 'Day', 'duration_minutes': 720, 'price': price_full_day, 'is_active': True})
+        create_booking_type({'room_id': new_room.id, 'name': 'By Day', 'duration_minutes': 720, 'price': price_full_day, 'is_active': True})
     if type_weekly == 'on' and price_weekly is not None:
-        create_booking_type({'room_id': new_room.id, 'name': 'Week', 'duration_minutes': 3600, 'price': price_weekly, 'is_active': True})
+        create_booking_type({'room_id': new_room.id, 'name': 'By Week', 'duration_minutes': 3600, 'price': price_weekly, 'is_active': True})
         
     return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
 
@@ -540,13 +540,13 @@ async def create_booking_type_admin(
                 return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
 
     if type_hourly == 'on' and price_hourly is not None:
-        create_booking_type({'room_id': room_id, 'name': '1 Heure', 'duration_minutes': 60, 'price': price_hourly, 'is_active': True})
+        create_booking_type({'room_id': room_id, 'name': 'By Hour', 'duration_minutes': 60, 'price': price_hourly, 'is_active': True})
     if type_half_day == 'on' and price_half_day is not None:
-        create_booking_type({'room_id': room_id, 'name': 'Demi-journée', 'duration_minutes': 300, 'price': price_half_day, 'is_active': True})
+        create_booking_type({'room_id': room_id, 'name': 'By Half-Day', 'duration_minutes': 300, 'price': price_half_day, 'is_active': True})
     if type_full_day == 'on' and price_full_day is not None:
-        create_booking_type({'room_id': room_id, 'name': 'Journée', 'duration_minutes': 720, 'price': price_full_day, 'is_active': True})
+        create_booking_type({'room_id': room_id, 'name': 'By Day', 'duration_minutes': 720, 'price': price_full_day, 'is_active': True})
     if type_weekly == 'on' and price_weekly is not None:
-        create_booking_type({'room_id': room_id, 'name': 'Semaine', 'duration_minutes': 3600, 'price': price_weekly, 'is_active': True})
+        create_booking_type({'room_id': room_id, 'name': 'By Week', 'duration_minutes': 3600, 'price': price_weekly, 'is_active': True})
         
     return RedirectResponse(url=request.url_for('rooms_page'), status_code=303)
 

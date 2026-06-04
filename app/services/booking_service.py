@@ -14,6 +14,11 @@ def get_booking_type_by_id(type_id):
     return BookingType.query.get(type_id)
 
 def create_booking_type(data):
+    # Vérifier l'existence d'un type avec le même nom pour cette salle
+    existing = BookingType.query.filter_by(room_id=data['room_id'], name=data['name']).first()
+    if existing:
+        return existing # Empêche d'ajouter un doublon
+
     bt = BookingType(
         room_id=data['room_id'],
         name=data['name'],
@@ -525,7 +530,17 @@ def get_occupied_slots(room_id, booking_type_id=None, date_str=None, start_date_
             return {"error": "Format de start_date invalide (YYYY-MM-DD)"}, 400
 
     if not end_date_str:
-        end_date = start_date + timedelta(days=90)
+        # Cherche la date de la réservation la plus lointaine pour cette salle
+        last_booking = Booking.query.filter(
+            Booking.room_id == room_id,
+            Booking.status != 'cancelled'
+        ).order_by(Booking.end_time.desc()).first()
+
+        if last_booking and last_booking.end_time.date() > start_date:
+            end_date = last_booking.end_time.date()
+        else:
+            # Aucune réservation dans le futur : on ne vérifie que la semaine en cours
+            end_date = start_date + timedelta(days=7)
     else:
         try:
             end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()

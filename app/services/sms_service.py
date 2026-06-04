@@ -3,13 +3,9 @@ import random
 import string
 import requests
 
-# ============================================================
-#  SMS CONFIG (BREVO SMS API)
-#  Même clé API que l'email → pas de config supplémentaire
-# ============================================================
-
-BREVO_API_KEY  = os.getenv("BREVO_API_KEY", "")
-SMS_SENDER     = os.getenv("BREVO_SMS_SENDER", "CoWorks")   # max 11 chars
+# ── SMS CONFIG — valeurs lues depuis .env ────────────────────
+BREVO_API_KEY = os.getenv("BREVO_API_KEY")
+SMS_SENDER    = os.getenv("BREVO_SMS_SENDER")
 
 # Stockage temporaire des codes SMS (en production → Redis ou DB)
 # Format : { phone: { "code": "12345", "uid": "uuid..." } }

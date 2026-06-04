@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()  # ← doit être en premier, avant tout autre import
 
+import os
 from fastapi import FastAPI, Request
 from fastapi_mcp import FastApiMCP
 from fastapi.middleware.cors import CORSMiddleware
@@ -68,6 +69,10 @@ mcp = FastApiMCP(app, name="Coworking")
 mcp.mount_http()
 
 if __name__ == '__main__':
-    
     import uvicorn
-    uvicorn.run("main:app", host="::", port=5000, reload=True)
+    uvicorn.run(
+        "main:app",
+        host=os.getenv("APP_HOST"),
+        port=int(os.getenv("APP_PORT")),
+        reload=True
+    )

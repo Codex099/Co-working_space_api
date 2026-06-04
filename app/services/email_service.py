@@ -3,13 +3,10 @@ import random
 import string
 import requests
 
-# ============================================================
-#  EMAIL CONFIG (BREVO API)
-# ============================================================
-BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
-# L'email que vous avez validé sur Brevo comme expéditeur
-SENDER_EMAIL  = os.getenv("SMTP_USER", "votre-email@gmail.com")
-FRONTEND_URL  = os.getenv("FRONTEND_URL", "http://localhost:3000")
+# ── EMAIL CONFIG — valeurs lues depuis .env ───────────────────
+BREVO_API_KEY = os.getenv("BREVO_API_KEY")
+SENDER_EMAIL  = os.getenv("SMTP_USER")
+
 
 # Stockage temporaire des codes (en production → Redis ou DB)
 verification_codes: dict = {}   # { email: code }

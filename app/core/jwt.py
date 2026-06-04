@@ -1,17 +1,12 @@
+import os
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from fastapi import HTTPException, status
-import os
 
-# ============================================================
-#  JWT CONFIG
-#  → Change SECRET_KEY en production (variable d'environnement)
-#  → ALGORITHM HS256 est standard pour les API REST
-#  → ACCESS_TOKEN_EXPIRE_MINUTES : durée de vie du token (30 min)
-# ============================================================
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "coworking_super_secret_change_in_prod")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 heures
+# ── JWT CONFIG — valeurs lues depuis .env ─────────────────────
+SECRET_KEY                  = os.getenv("JWT_SECRET_KEY")
+ALGORITHM                   = os.getenv("JWT_ALGORITHM")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
 
 
 def create_access_token(data: dict, expires_minutes: int = ACCESS_TOKEN_EXPIRE_MINUTES) -> str:

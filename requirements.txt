@@ -1,17 +1,16 @@
-fastapi
-uvicorn[standard]
-pydantic[email]
-python-multipart
-sqlalchemy
-psycopg[binary]  # driver postgresql
-jinja2
-passlib[bcrypt]
-bcrypt<4.0.0
-python-jose[cryptography]
-firebase-admin
-email-validator
-dnspython
-python-dotenv  # pour le fichier .env
-httpx # requete http pour brevo 
-fastapi-mcp
-    
+fastapi  # Framework web principal pour créer l'API
+uvicorn  # Serveur web externe pour exécuter l'application FastAPI
+pydantic  # Validation des données (inclut la validation des adresses email)
+python-multipart  # Nécessaire pour traiter les données de formulaires (ex: login/fichiers)
+sqlalchemy  # ORM pour structurer et interagir avec la base de données relationnelle
+psycopg[binary]  # [deux bib includ gcc libpq-dev] Pilote (driver) PostgreSQL pour la connexion à la base de données
+jinja2  # Moteur de templates utilisé pour le rendu des pages HTML ou emails
+passlib  # Outil pour hacher et vérifier les mots de passe de façon sécurisée
+bcrypt<4.0.0  # L'algorithme de hachage utilisé par passlib 
+python-jose[cryptography]  # Outil pour générer et vérifier les tokens d'authentification JWT
+firebase-admin  # SDK officiel pour gérer Firebase (authentification côté serveur etc.)
+email-validator  # Dépendance de pydantic pour valider formellement les emails
+dnspython  # Utilisé avec email-validator pour vérifier si le domaine de l'email existe
+python-dotenv  # Pour charger les variables d'environnement à partir du fichier .env
+requests  # Pour effectuer des requêtes HTTP (utilisé ici pour l'API Brevo / SMS / Emails)
+fastapi-mcp  # Intégration du Model Context Protocol (MCP) pour FastAPI

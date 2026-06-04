@@ -40,28 +40,28 @@
                                 <div class="col-md-3">
                                     <div class="custom-control custom-checkbox mb-2">
                                         <input type="checkbox" class="custom-control-input" id="checkHourly" name="type_hourly" onchange="document.getElementById('priceHourly').disabled = !this.checked; if(this.checked) document.getElementById('priceHourly').required = true; else document.getElementById('priceHourly').required = false;">
-                                        <label class="custom-control-label font-weight-bold small text-light" for="checkHourly">1 Heure</label>
+                                        <label class="custom-control-label font-weight-bold small text-light" for="checkHourly">By Hour</label>
                                     </div>
                                     <input type="number" step="0.01" id="priceHourly" name="price_hourly" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
                                 </div>
                                 <div class="col-md-3">
                                     <div class="custom-control custom-checkbox mb-2">
                                         <input type="checkbox" class="custom-control-input" id="checkHalfDay" name="type_half_day" onchange="document.getElementById('priceHalfDay').disabled = !this.checked; if(this.checked) document.getElementById('priceHalfDay').required = true; else document.getElementById('priceHalfDay').required = false;">
-                                        <label class="custom-control-label font-weight-bold small text-light" for="checkHalfDay">Demi-journée (5h)</label>
+                                        <label class="custom-control-label font-weight-bold small text-light" for="checkHalfDay">By Half-Day</label>
                                     </div>
                                     <input type="number" step="0.01" id="priceHalfDay" name="price_half_day" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
                                 </div>
                                 <div class="col-md-3">
                                     <div class="custom-control custom-checkbox mb-2">
                                         <input type="checkbox" class="custom-control-input" id="checkFullDay" name="type_full_day" onchange="document.getElementById('priceFullDay').disabled = !this.checked; if(this.checked) document.getElementById('priceFullDay').required = true; else document.getElementById('priceFullDay').required = false;">
-                                        <label class="custom-control-label font-weight-bold small text-light" for="checkFullDay">Journée (12h)</label>
+                                        <label class="custom-control-label font-weight-bold small text-light" for="checkFullDay">By Day</label>
                                     </div>
                                     <input type="number" step="0.01" id="priceFullDay" name="price_full_day" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
                                 </div>
                                 <div class="col-md-3">
                                     <div class="custom-control custom-checkbox mb-2">
                                         <input type="checkbox" class="custom-control-input" id="checkWeekly" name="type_weekly" onchange="document.getElementById('priceWeekly').disabled = !this.checked; if(this.checked) document.getElementById('priceWeekly').required = true; else document.getElementById('priceWeekly').required = false;">
-                                        <label class="custom-control-label font-weight-bold small text-light" for="checkWeekly">Semaine (5j)</label>
+                                        <label class="custom-control-label font-weight-bold small text-light" for="checkWeekly">By Week</label>
                                     </div>
                                     <input type="number" step="0.01" id="priceWeekly" name="price_weekly" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
                                 </div>
@@ -262,32 +262,36 @@
                         <!-- Formulaire ajout nouveau type -->
                         <form action="/admin/rooms/{{ room.id }}/booking-types" method="POST">
                             <h6 class="font-weight-bold small text-uppercase text-secondary mt-2 mb-3 border-top pt-3">1. Ajouter un type prédéfini</h6>
+                            {% set has_hourly = room.booking_types | selectattr("name", "equalto", "By Hour") | list | length > 0 %}
+                            {% set has_half_day = room.booking_types | selectattr("name", "equalto", "By Half-Day") | list | length > 0 %}
+                            {% set has_full_day = room.booking_types | selectattr("name", "equalto", "By Day") | list | length > 0 %}
+                            {% set has_weekly = room.booking_types | selectattr("name", "equalto", "By Week") | list | length > 0 %}
                             <div class="row mb-3">
                                 <div class="col-md-3 mb-2">
                                     <div class="custom-control custom-checkbox mb-2">
-                                        <input type="checkbox" class="custom-control-input" id="checkHourly{{ room.id }}" name="type_hourly" onchange="document.getElementById('priceHourly{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceHourly{{ room.id }}').required = true; else document.getElementById('priceHourly{{ room.id }}').required = false;">
-                                        <label class="custom-control-label font-weight-bold small text-dark" for="checkHourly{{ room.id }}">1 Heure</label>
+                                        <input type="checkbox" class="custom-control-input" id="checkHourly{{ room.id }}" name="type_hourly" onchange="document.getElementById('priceHourly{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceHourly{{ room.id }}').required = true; else document.getElementById('priceHourly{{ room.id }}').required = false;" {% if has_hourly %}disabled{% endif %}>
+                                        <label class="custom-control-label font-weight-bold small text-dark" for="checkHourly{{ room.id }}">By Hour {% if has_hourly %}<span class="text-danger ml-1" style="font-size:0.75rem;">(Déjà existant)</span>{% endif %}</label>
                                     </div>
                                     <input type="number" step="0.01" id="priceHourly{{ room.id }}" name="price_hourly" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
                                 </div>
                                 <div class="col-md-3 mb-2">
                                     <div class="custom-control custom-checkbox mb-2">
-                                        <input type="checkbox" class="custom-control-input" id="checkHalfDay{{ room.id }}" name="type_half_day" onchange="document.getElementById('priceHalfDay{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceHalfDay{{ room.id }}').required = true; else document.getElementById('priceHalfDay{{ room.id }}').required = false;">
-                                        <label class="custom-control-label font-weight-bold small text-dark" for="checkHalfDay{{ room.id }}">Demi-journée (5h)</label>
+                                        <input type="checkbox" class="custom-control-input" id="checkHalfDay{{ room.id }}" name="type_half_day" onchange="document.getElementById('priceHalfDay{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceHalfDay{{ room.id }}').required = true; else document.getElementById('priceHalfDay{{ room.id }}').required = false;" {% if has_half_day %}disabled{% endif %}>
+                                        <label class="custom-control-label font-weight-bold small text-dark" for="checkHalfDay{{ room.id }}">By Half-Day {% if has_half_day %}<span class="text-danger ml-1" style="font-size:0.75rem;">(Déjà existant)</span>{% endif %}</label>
                                     </div>
                                     <input type="number" step="0.01" id="priceHalfDay{{ room.id }}" name="price_half_day" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
                                 </div>
                                 <div class="col-md-3 mb-2">
                                     <div class="custom-control custom-checkbox mb-2">
-                                        <input type="checkbox" class="custom-control-input" id="checkFullDay{{ room.id }}" name="type_full_day" onchange="document.getElementById('priceFullDay{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceFullDay{{ room.id }}').required = true; else document.getElementById('priceFullDay{{ room.id }}').required = false;">
-                                        <label class="custom-control-label font-weight-bold small text-dark" for="checkFullDay{{ room.id }}">Journée (12h)</label>
+                                        <input type="checkbox" class="custom-control-input" id="checkFullDay{{ room.id }}" name="type_full_day" onchange="document.getElementById('priceFullDay{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceFullDay{{ room.id }}').required = true; else document.getElementById('priceFullDay{{ room.id }}').required = false;" {% if has_full_day %}disabled{% endif %}>
+                                        <label class="custom-control-label font-weight-bold small text-dark" for="checkFullDay{{ room.id }}">By Day {% if has_full_day %}<span class="text-danger ml-1" style="font-size:0.75rem;">(Déjà existant)</span>{% endif %}</label>
                                     </div>
                                     <input type="number" step="0.01" id="priceFullDay{{ room.id }}" name="price_full_day" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
                                 </div>
                                 <div class="col-md-3 mb-2">
                                     <div class="custom-control custom-checkbox mb-2">
-                                        <input type="checkbox" class="custom-control-input" id="checkWeekly{{ room.id }}" name="type_weekly" onchange="document.getElementById('priceWeekly{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceWeekly{{ room.id }}').required = true; else document.getElementById('priceWeekly{{ room.id }}').required = false;">
-                                        <label class="custom-control-label font-weight-bold small text-dark" for="checkWeekly{{ room.id }}">Semaine (5j)</label>
+                                        <input type="checkbox" class="custom-control-input" id="checkWeekly{{ room.id }}" name="type_weekly" onchange="document.getElementById('priceWeekly{{ room.id }}').disabled = !this.checked; if(this.checked) document.getElementById('priceWeekly{{ room.id }}').required = true; else document.getElementById('priceWeekly{{ room.id }}').required = false;" {% if has_weekly %}disabled{% endif %}>
+                                        <label class="custom-control-label font-weight-bold small text-dark" for="checkWeekly{{ room.id }}">By Week {% if has_weekly %}<span class="text-danger ml-1" style="font-size:0.75rem;">(Déjà existant)</span>{% endif %}</label>
                                     </div>
                                     <input type="number" step="0.01" id="priceWeekly{{ room.id }}" name="price_weekly" class="form-control form-control-sm" placeholder="Prix (DA)" disabled>
                                 </div>
@@ -323,7 +327,7 @@
                             <form action="/admin/rooms/{{ room.id }}/booking-types/{{ bt.id }}/edit" method="POST">
                                 <div class="form-group">
                                     <label class="small font-weight-bold">Nom du type</label>
-                                    <input type="text" name="name" class="form-control" value="{{ bt.name }}" required>
+                                    <input type="text" name="name" class="form-control" value="{{ bt.name }}" readonly>
                                 </div>
                                 <div class="form-group">
                                     <label class="small font-weight-bold">Prix (DA)</label>
