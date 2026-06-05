@@ -9,7 +9,6 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from db.database import Base, engine, db_session
 from api.router import api_router
-from core.exceptions import AppException, app_exception_handler
 import asyncio
 from services.booking_service import update_expired_bookings
 
@@ -24,8 +23,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.add_exception_handler(AppException, app_exception_handler)
 
 app.include_router(api_router)
 
