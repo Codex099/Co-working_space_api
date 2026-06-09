@@ -18,7 +18,7 @@ def generate_code(length: int = 6) -> str:
     return ''.join(random.choices(string.digits, k=length))
 
 
-def send_verification_email(to_email: str, code: str, username: str = "utilisateur") -> bool:
+def send_verification_email(to_email: str, code: str, username: str = "utilisateur", action: str = "signup") -> bool:
     """
     Envoie un email de vérification via l'API Brevo.
     Retourne True si succès ou Fallback, False sinon.
@@ -26,11 +26,30 @@ def send_verification_email(to_email: str, code: str, username: str = "utilisate
     # Mode DEV : pas de clé API → affiche dans le terminal
     if not BREVO_API_KEY:
         print(f"\n{'='*50}")
-        print(f"[DEV MODE] Code de vérification pour {to_email}: {code}")
+        print(f"[DEV MODE] Code de vérification ({action}) pour {to_email}: {code}")
         print(f"{'='*50}\n")
         return True
 
     try:
+        texts = {
+            "signup": {
+                "subject": "Vérification de votre compte CoWorking Space",
+                "message": "Bienvenue ! Pour finaliser la création de votre compte et sécuriser votre accès, veuillez utiliser le code de confirmation suivant :"
+            },
+            "reset_password": {
+                "subject": "Réinitialisation de votre mot de passe",
+                "message": "Vous avez demandé la réinitialisation de votre mot de passe. Veuillez utiliser le code de vérification suivant pour procéder :"
+            },
+            "update_email": {
+                "subject": "Confirmation de votre nouvelle adresse email",
+                "message": "Vous avez demandé à changer votre adresse email. Veuillez utiliser le code de confirmation suivant pour valider cette nouvelle adresse :"
+            }
+        }
+        
+        email_data = texts.get(action, texts["signup"])
+        subject = email_data["subject"]
+        message = email_data["message"]
+
         html_content = f"""
         <!DOCTYPE html>
 <html lang="fr">
@@ -72,7 +91,7 @@ def send_verification_email(to_email: str, code: str, username: str = "utilisate
                 Bonjour <strong>{username}</strong>, 👋
               </p>
               <p style="margin:0 0 24px;font-size:16px;color:#4B5563;line-height:1.6;">
-                Bienvenue ! Pour finaliser la création de votre compte et sécuriser votre accès, veuillez utiliser le code de confirmation suivant :
+                {message}
               </p>
 
               <!-- Code block -->
@@ -129,7 +148,7 @@ def send_verification_email(to_email: str, code: str, username: str = "utilisate
         payload = {
             "sender": {"name": "CoWorking Space", "email": SENDER_EMAIL},
             "to": [{"email": to_email, "name": username}],
-            "subject": "Vérification de votre compte Co Working Space",
+            "subject": subject,
             "htmlContent": html_content
         }
 

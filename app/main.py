@@ -62,7 +62,8 @@ async def on_startup():
 def on_shutdown():
     db_session.remove()
 
-mcp = FastApiMCP(app, name="Coworking")
+
+mcp = FastApiMCP(app, name="Coworking", include_tags=["mcp_access"])
 mcp.mount_http()
 
 if __name__ == '__main__':

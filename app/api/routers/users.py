@@ -146,7 +146,7 @@ def get_balance_history_route(current_user: dict = Depends(get_current_user)):
     resp, code = get_balance_history_logic(current_user["uid"])
     return JSONResponse(content=resp, status_code=code)
 
-@router.put('/me', tags=["update"])
+@router.patch('/me', tags=["update"])
 def update_profile_route(data: UpdateUserRequest, current_user: dict = Depends(get_current_user)):
     """
     Met à jour les informations de profil (ex: username) de l'utilisateur connecté.
@@ -161,7 +161,7 @@ def get_user_by_email_route(email: str, current_user: dict = Depends(get_current
     return JSONResponse(content=resp, status_code=code)
 
 
-@router.put('/me/password', tags=["update"])
+@router.patch('/me/password', tags=["update"])
 def update_password_route(data: UpdatePasswordRequest, current_user: dict = Depends(get_current_user)):
     resp, code = update_password_logic(
         uid=current_user["uid"],

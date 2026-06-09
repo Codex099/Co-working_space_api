@@ -15,13 +15,13 @@ router = APIRouter()
 
 # ─── Locations ───────────────────────────────────────────────
 
-@router.get('/locations', tags=["Locations"])
+@router.get('/locations', tags=["Locations","mcp_access"])
 def get_all_locations_route():
     resp, code = get_all_locations_logic()
     return JSONResponse(content=resp, status_code=code)
 
 
-@router.get('/rooms/by-location/{location_name}', tags=["Locations"])
+@router.get('/rooms/by-location/{location_name}', tags=["Locations","mcp_access"], operation_id="rooms_by_location_name")
 def rooms_by_location_name_route(location_name: str):
     """Retourne les salles d'un espace avec leurs types de réservation disponibles."""
     resp, code = get_rooms_by_location_name(location_name)
@@ -30,7 +30,7 @@ def rooms_by_location_name_route(location_name: str):
 
 # ─── Booking Types par salle ─────────────────────────────────
 
-@router.get('/rooms/{room_id}/booking-types', tags=["Booking Types"])
+@router.get('/rooms/{room_id}/booking-types', tags=["Booking Types","mcp_access"])
 def get_room_booking_types_route(room_id: int):
     """Liste tous les types de réservation actifs d'une salle."""
     types = get_booking_types_by_room(room_id)
