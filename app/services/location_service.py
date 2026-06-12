@@ -7,10 +7,17 @@ def get_all_locations():
 
 def create_location(data):
     image_data = data.get('image_data')
+    from datetime import datetime as dt
+    opening_time = dt.strptime(data.get('opening_time', '08:00'), '%H:%M').time() if data.get('opening_time') else dt.strptime('08:00', '%H:%M').time()
+    closing_time = dt.strptime(data.get('closing_time', '20:00'), '%H:%M').time() if data.get('closing_time') else dt.strptime('20:00', '%H:%M').time()
+    
     location = Location(
         name=data['name'],
         image_data=image_data,
-        manager_id=data.get('manager_id')
+        manager_id=data.get('manager_id'),
+        commission_rate=data.get('commission_rate', 0.15),
+        opening_time=opening_time,
+        closing_time=closing_time
     )
     db.session.add(location)
     db.session.commit()
@@ -56,6 +63,8 @@ def get_all_locations_logic():
         result.append({
             "id": loc.id,
             "name": loc.name,
+            "opening_time": loc.opening_time.strftime('%H:%M') if loc.opening_time else None,
+            "closing_time": loc.closing_time.strftime('%H:%M') if loc.closing_time else None,
             "image_base64": image_base64
         })
     return result, 200

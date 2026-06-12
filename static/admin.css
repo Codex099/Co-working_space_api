@@ -9,6 +9,12 @@
     --danger: #ef4444;
 }
 
+.text-primary { color: var(--primary) !important; }
+.btn-primary { background-color: var(--primary) !important; border-color: var(--primary) !important; }
+.btn-primary:hover { background-color: var(--primary-hover) !important; border-color: var(--primary-hover) !important; }
+.btn-outline-primary { color: var(--primary) !important; border-color: var(--primary) !important; }
+.btn-outline-primary:hover { background-color: var(--primary) !important; color: white !important; }
+
 body {
     font-family: 'Outfit', sans-serif;
     background: var(--bg-body);

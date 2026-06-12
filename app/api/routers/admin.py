@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Form, File, UploadFile, Depends
+from fastapi import APIRouter, Request, Form, File, UploadFile, Depends, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from typing import Optional
@@ -19,6 +19,9 @@ from services.location_service import (
 )
 from services.recharge_service import get_user_recharges, create_recharge_db as create_recharge, get_all_recharges
 from services.booking_service import get_all_bookings, update_expired_bookings
+from services.space_manager_amount_service import (
+    get_manager_pending_balance, create_settlement, get_settlement_history, delete_settlement
+)
 from core.dependencies import get_admin_user_from_cookie
 
 admin_bp = APIRouter(prefix='/admin')
@@ -438,18 +441,36 @@ async def create_location_admin(
     request: Request,
     name: str = Form(...),
     manager_id: Optional[str] = Form(None),
+    commission_rate: float = Form(0.15),
+    opening_time: str = Form("08:00"),
+    closing_time: str = Form("20:00"),
     image: UploadFile = File(None),
     admin_user = Depends(get_admin_user_from_cookie)
 ):
     if admin_user.role != 'admin':
         return RedirectResponse(url=request.url_for('locations_page'), status_code=303)
         
+    from datetime import datetime as dt
+    from urllib.parse import urlencode
+
+    try:
+        op_time = dt.strptime(opening_time, '%H:%M').time()
+        cl_time = dt.strptime(closing_time, '%H:%M').time()
+        
+        if op_time >= cl_time:
+            error_msg = "L'heure d'ouverture doit être avant l'heure de fermeture."
+            return RedirectResponse(url=f"{request.url_for('locations_page')}?{urlencode({'error': error_msg})}", status_code=303)
+            
+    except ValueError:
+        error_msg = "Format d'heure invalide."
+        return RedirectResponse(url=f"{request.url_for('locations_page')}?{urlencode({'error': error_msg})}", status_code=303)
+
     image_data = await image.read() if image and image.filename else None
     
     # Enforce null logic for empty strings
     manager_id = manager_id if manager_id else None
         
-    create_location({'name': name, 'image_data': image_data, 'manager_id': manager_id})
+    create_location({'name': name, 'image_data': image_data, 'manager_id': manager_id, 'commission_rate': commission_rate, 'opening_time': opening_time, 'closing_time': closing_time})
     return RedirectResponse(url=request.url_for('locations_page'), status_code=303)
 
 @admin_bp.post('/rooms')
@@ -657,18 +678,45 @@ async def edit_location_admin(
     location_id: int, 
     name: str = Form(...), 
     manager_id: Optional[str] = Form(None), 
+    commission_rate: Optional[float] = Form(None),
+    opening_time: str = Form("08:00"),
+    closing_time: str = Form("20:00"),
     admin_user = Depends(get_admin_user_from_cookie)
 ):
-    if admin_user.role != 'admin':
-        return RedirectResponse(url=request.url_for('locations_page'), status_code=303)
-        
     from models.domain import Location
     from db.database import db
+    from datetime import datetime as dt
+    
     loc = Location.query.get(location_id)
-    if loc:
+    if not loc:
+        return RedirectResponse(url=request.url_for('locations_page'), status_code=303)
+
+    if admin_user.role == 'admin':
         loc.name = name
         loc.manager_id = manager_id if manager_id else None
-        db.session.commit()
+        if commission_rate is not None:
+            loc.commission_rate = commission_rate
+
+    if admin_user.role in ['admin', 'space_manager']:
+        if admin_user.role == 'space_manager' and loc.manager_id != admin_user.id:
+            return RedirectResponse(url=request.url_for('locations_page'), status_code=303)
+            
+        from urllib.parse import urlencode
+        try:
+            op_time = dt.strptime(opening_time, '%H:%M').time()
+            cl_time = dt.strptime(closing_time, '%H:%M').time()
+            
+            if op_time >= cl_time:
+                error_msg = "L'heure d'ouverture doit être avant l'heure de fermeture."
+                return RedirectResponse(url=f"{request.url_for('locations_page')}?{urlencode({'error': error_msg})}", status_code=303)
+                
+            loc.opening_time = op_time
+            loc.closing_time = cl_time
+            db.session.commit()
+            
+        except ValueError:
+            error_msg = "Format d'heure invalide."
+            return RedirectResponse(url=f"{request.url_for('locations_page')}?{urlencode({'error': error_msg})}", status_code=303)
         
     return RedirectResponse(url=request.url_for('locations_page'), status_code=303)
 
@@ -725,16 +773,23 @@ def bookings_page(request: Request,
         
     if search_status:
         if search_status == 'confirmed':
-            bookings = [b for b in bookings if b.status in ['confirmed', 'upcoming', None]]
+            bookings = [b for b in bookings if b.status in ['confirmed', None]]
+        elif search_status == 'upcoming':
+            bookings = [b for b in bookings if b.status == 'upcoming']
         else:
             bookings = [b for b in bookings if b.status == search_status]
         
-    return templates.TemplateResponse(request, 'bookings.html', {
+    context = {
         "request": request, 
         "bookings": bookings, 
         "admin_user": admin_user,
         "now": datetime.utcnow()
-    })
+    }
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return templates.TemplateResponse(request, 'partials/bookings_table.html', context)
+
+    return templates.TemplateResponse(request, 'bookings.html', context)
 
 
 
@@ -1052,3 +1107,224 @@ def revenue_stats_page(request: Request, days: int = 7, admin_user = Depends(get
         "kpi": kpi
     })
 
+
+
+@admin_bp.get('/earnings', response_class=HTMLResponse, name='admin_earnings')
+def earnings_page(request: Request, 
+                  location_id: Optional[int] = Query(None), 
+                  manager_id: Optional[str] = Query(None), 
+                  search_date: Optional[str] = Query(None),
+                  selected_month: Optional[str] = Query(None),
+                  sort_order: str = Query('desc'),
+                  admin_user = Depends(get_admin_user_from_cookie)):
+    from models.domain import SpaceManagerEarning, User, Location, Room, Booking
+    from db.database import db
+    from sqlalchemy import func, desc, asc, extract, or_, and_
+    from datetime import datetime, timedelta
+    import calendar
+
+    # 1. Available Months for filtering (last 12 months)
+    available_months = []
+    curr_yr, curr_mo = datetime.now().year, datetime.now().month
+    for i in range(12):
+        mo = curr_mo - i
+        yr = curr_yr
+        if mo <= 0:
+            mo += 12
+            yr -= 1
+        available_months.append({
+            'value': f"{yr}-{mo:02d}",
+            'label': f"{calendar.month_name[mo]} {yr}"
+        })
+
+    # Default to current month if no filter is set
+    if selected_month is None and search_date is None:
+        selected_month = datetime.now().strftime("%Y-%m")
+
+    # 2. Fetch Summary Data (Managers -> Locations -> Total Net/Gross/Comm)
+    managers_list = User.query.filter_by(role='space_manager').all()
+    if admin_user.role == 'space_manager':
+        managers_list = [m for m in managers_list if m.id == admin_user.id]
+
+    manager_data = []
+    global_total_gross = 0.0
+    global_total_comm = 0.0
+    global_total_net = 0.0
+
+    for manager in managers_list:
+        locs = Location.query.filter_by(manager_id=manager.id).all()
+        locations_summary = []
+        for loc in locs:
+            # Stats per location
+            query_stats = db.session.query(
+                func.sum(SpaceManagerEarning.gross_amount).label('gross'),
+                func.sum(SpaceManagerEarning.commission_amount).label('comm'),
+                func.sum(SpaceManagerEarning.net_amount).label('net')
+            ).join(Booking, SpaceManagerEarning.booking_id == Booking.id)\
+             .join(Room, Booking.room_id == Room.id)\
+             .filter(Room.location_id == loc.id)\
+             .filter(or_(
+                 Booking.status.in_(['confirmed', 'cancelled']),
+                 and_(Booking.status == 'upcoming', Booking.start_time <= datetime.utcnow() + timedelta(hours=24))
+             ))
+            
+            if selected_month:
+                year, month = map(int, selected_month.split('-'))
+                query_stats = query_stats.filter(extract('year', Booking.start_time) == year, 
+                                               extract('month', Booking.start_time) == month)
+            
+            stats = query_stats.first()
+            
+            locations_summary.append({
+                'id': loc.id,
+                'name': loc.name,
+                'commission_rate': loc.commission_rate,
+                'total_gross': round(stats.gross or 0.0, 2),
+                'total_comm': round(stats.comm or 0.0, 2),
+                'total_net': round(stats.net or 0.0, 2)
+            })
+        
+        m_total_gross = sum(l['total_gross'] for l in locations_summary)
+        m_total_comm = sum(l['total_comm'] for l in locations_summary)
+        m_total_net = sum(l['total_net'] for l in locations_summary)
+
+        global_total_gross += m_total_gross
+        global_total_comm += m_total_comm
+        global_total_net += m_total_net
+
+        manager_data.append({
+            'id': manager.id,
+            'username': manager.username,
+            'locations': locations_summary,
+            'total_gross': round(m_total_gross, 2),
+            'total_comm': round(m_total_comm, 2),
+            'total_net': round(m_total_net, 2)
+        })
+
+    # 3. Fetch History
+    query = SpaceManagerEarning.query.join(Booking, SpaceManagerEarning.booking_id == Booking.id)\
+                                     .join(Room, Booking.room_id == Room.id)\
+                                     .filter(or_(
+                                         Booking.status.in_(['confirmed', 'cancelled']),
+                                         and_(Booking.status == 'upcoming', Booking.start_time <= datetime.utcnow() + timedelta(hours=24))
+                                     ))
+    
+    if admin_user.role == 'space_manager':
+        query = query.filter(SpaceManagerEarning.manager_id == admin_user.id)
+    
+    selected_location = None
+    selected_manager = None
+
+    if location_id:
+        query = query.filter(Room.location_id == location_id)
+        selected_location = Location.query.get(location_id)
+    elif manager_id:
+        query = query.filter(SpaceManagerEarning.manager_id == manager_id)
+        selected_manager = User.query.get(manager_id)
+
+    if search_date:
+        query = query.filter(func.date(Booking.start_time) == search_date)
+    elif selected_month:
+        year, month = map(int, selected_month.split('-'))
+        query = query.filter(extract('year', Booking.start_time) == year, 
+                             extract('month', Booking.start_time) == month)
+
+    # Sorting
+    if sort_order == 'asc':
+        query = query.order_by(asc(Booking.start_time))
+    else:
+        query = query.order_by(desc(Booking.start_time))
+
+    earnings = query.all()
+    
+    return templates.TemplateResponse(request, 'earnings.html', {
+        "request": request, 
+        "earnings": earnings, 
+        "admin_user": admin_user,
+        "manager_data": manager_data,
+        "global_total_gross": round(global_total_gross, 2),
+        "global_total_comm": round(global_total_comm, 2),
+        "global_total_net": round(global_total_net, 2),
+        "selected_location_id": location_id,
+        "selected_location": selected_location,
+        "selected_manager_id": manager_id,
+        "selected_manager": selected_manager,
+        "search_date": search_date,
+        "selected_month": selected_month,
+        "available_months": available_months,
+        "sort_order": sort_order
+    })
+
+
+@admin_bp.get('/payments', response_class=HTMLResponse)
+def payments_page(request: Request, manager_id: Optional[str] = Query(None), error: Optional[str] = Query(None), admin_user = Depends(get_admin_user_from_cookie)):
+    from models.domain import User, Settlement
+    from db.database import db
+    
+    # 1. Access Control: Admins see all, Managers see only themselves
+    if admin_user.role not in ['admin', 'space_manager']:
+        return RedirectResponse(url="/admin/", status_code=303)
+
+    if admin_user.role == 'space_manager':
+        manager_id = admin_user.id # Force manager to see only their history
+        managers = [admin_user]
+    else:
+        # Admin: get all managers
+        managers = User.query.filter_by(role='space_manager').all()
+
+    # 2. Compute pending balances
+    manager_list = []
+    for m in managers:
+        pending = get_manager_pending_balance(db.session, m.id)
+        manager_list.append({
+            'id': m.id,
+            'username': m.username,
+            'email': m.email,
+            'pending_balance': round(pending, 2)
+        })
+    
+    # 3. Get settlement history (filtered by manager_id if provided/forced)
+    history = get_settlement_history(db.session, manager_id)
+    
+    return templates.TemplateResponse(request, 'payments.html', {
+        "request": request,
+        "admin_user": admin_user,
+        "managers": manager_list,
+        "history": history,
+        "selected_manager_id": manager_id,
+        "error": error
+    })
+
+@admin_bp.post('/payments/create')
+async def process_payment(
+    request: Request,
+    manager_id: str = Form(...),
+    amount: float = Form(...),
+    notes: Optional[str] = Form(None),
+    admin_user = Depends(get_admin_user_from_cookie)
+):
+    from db.database import db
+    from urllib.parse import urlencode
+    if admin_user.role != 'admin':
+        return RedirectResponse(url="/admin/", status_code=303)
+        
+    try:
+        create_settlement(db.session, manager_id, amount, notes)
+    except Exception as e:
+        error_msg = str(e.detail) if hasattr(e, 'detail') else str(e)
+        return RedirectResponse(url=f"{request.url_for('payments_page')}?{urlencode({'error': error_msg})}", status_code=303)
+        
+    return RedirectResponse(url=request.url_for('payments_page'), status_code=303)
+
+@admin_bp.post('/payments/delete/{settlement_id}')
+def cancel_payment(request: Request, settlement_id: int, admin_user = Depends(get_admin_user_from_cookie)):
+    from db.database import db
+    if admin_user.role != 'admin':
+        return RedirectResponse(url="/admin/", status_code=303)
+        
+    try:
+        delete_settlement(db.session, settlement_id)
+    except Exception:
+        pass
+        
+    return RedirectResponse(url=request.url_for('payments_page'), status_code=303)

@@ -1,0 +1,49 @@
+<table class="table" id="bookings-table-content">
+    <thead>
+        <tr>
+            <th>Utilisateur</th>
+            <th>Salle</th>
+            <th>Type</th>
+            <th>Début</th>
+            <th>Fin</th>
+            <th>Prix Total</th>
+            <th>Date</th>
+            <th>Statut</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for booking in bookings %}
+        <tr>
+            <td>
+                <div class="user-email text-nowrap">{{ booking.user.email }}</div>
+                <small class="text-muted text-nowrap">{{ booking.user.username }}</small>
+            </td>
+            <td><span class="room-name text-nowrap">{{ booking.room.name }}</span></td>
+            <td><span class="price-badge text-nowrap">{{ booking.booking_type.name }}</span></td>
+            <td><span class="time-badge"><i class="far fa-clock mr-2"></i> {{ booking.start_time.strftime('%H:%M') }}</span></td>
+            <td>
+                <span class="time-badge"><i class="fas fa-flag-checkered mr-2"></i> {{ booking.end_time.strftime('%H:%M') }}</span>
+            </td>
+            <td class="text-nowrap"><span class="price-text">{{ booking.total_price }} DA</span></td>
+            <td class="text-nowrap"><div class="small font-weight-bold">{{ booking.start_time.strftime('%d/%m/%Y') }}</div></td>
+            <td class="text-nowrap">
+                {% if booking.status == 'cancelled' %}
+                    <span class="badge badge-danger px-3 py-2" style="border-radius: 8px;">Annulée</span>
+                {% elif booking.status == 'upcoming' %}
+                    <span class="badge badge-info px-3 py-2" style="border-radius: 8px; background-color: #6366f1;">Prochaine</span>
+                {% else %}
+                    <span class="badge badge-success px-3 py-2" style="border-radius: 8px;">Confirmée</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        {% if not bookings %}
+        <tr>
+            <td colspan="8" class="text-center py-5 text-muted">
+                <i class="fas fa-search fa-3x mb-3 d-block opacity-25"></i>
+                Aucune réservation trouvée.
+            </td>
+        </tr>
+        {% endif %}
+    </tbody>
+</table>

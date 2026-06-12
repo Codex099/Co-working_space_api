@@ -7,94 +7,175 @@
 
 {% block content %}
         {% if admin_user.role == 'admin' %}
-        <div class="premium-card">
-            <h4 class="mb-4 font-weight-bold"><i class="fas fa-plus-circle text-primary mr-2"></i> Ajouter une location
-            </h4>
-            <form method="POST" action="{{ url_for('create_location_admin') }}" enctype="multipart/form-data">
-                <div class="row">
-                    <div class="col-md-4 col-sm-6 mb-3"><label class="small font-weight-bold">Nom</label><input
-                            type="text" name="name" class="form-control" placeholder="Ex: Coworking Algiers" required>
-                    </div>
-                    <div class="col-md-4 col-sm-6 mb-3"><label class="small font-weight-bold">Responsable</label><select
-                            name="manager_id" class="form-control">
-                            <option value="">-- Aucun --</option>{% for m in managers %}<option value="{{ m.id }}">{{
-                                m.username }}</option>{% endfor %}
-                        </select></div>
-                    <div class="col-md-4 col-sm-12 mb-3"><label class="small font-weight-bold">Image</label><input
-                            type="file" name="image" class="form-control-file p-1" accept="image/*" required></div>
-                    <div class="col-12 mt-2"><button type="submit" class="btn-premium btn-add w-100">Créer la
-                            location</button></div>
+    <div class="premium-card shadow-sm border-0 mb-5" style="border-radius: 20px; background: white;">
+        <h4 class="mb-4 font-weight-bold text-dark"><i class="fas fa-plus-circle text-primary mr-2"></i> Ajouter une nouvelle location</h4>
+        <form method="POST" action="{{ url_for('create_location_admin') }}" enctype="multipart/form-data" class="hour-validation-form">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="small font-weight-bold text-muted uppercase">Nom de la location</label>
+                    <input type="text" name="name" class="form-control bg-light border-0" placeholder="Ex: Focus Point - Es Sénia" style="border-radius: 10px;" required>
                 </div>
-            </form>
-        </div>
-        {% endif %}
+                <div class="col-md-4 mb-3">
+                    <label class="small font-weight-bold text-muted uppercase">Responsable</label>
+                    <select name="manager_id" class="form-control bg-light border-0" style="border-radius: 10px;">
+                        <option value="">-- Aucun --</option>
+                        {% for m in managers %}
+                        <option value="{{ m.id }}">{{ m.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="small font-weight-bold text-muted uppercase">Commission (Admin %)</label>
+                    <input type="number" step="0.01" name="commission_rate" class="form-control bg-light border-0" value="0.15" style="border-radius: 10px;" required>
+                </div>
+                
+                <div class="col-md-3 mb-3">
+                    <label class="small font-weight-bold text-muted uppercase">Heure d'ouverture</label>
+                    <input type="time" name="opening_time" class="form-control bg-light border-0 start-time" value="08:00" style="border-radius: 10px;" required>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="small font-weight-bold text-muted uppercase">Heure de fermeture</label>
+                    <input type="time" name="closing_time" class="form-control bg-light border-0 end-time" value="20:00" style="border-radius: 10px;" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="small font-weight-bold text-muted uppercase">Image de présentation</label>
+                    <input type="file" name="image" class="form-control-file p-2 bg-light w-100" accept="image/*" style="border-radius: 10px;" required>
+                </div>
+                
+                <div class="col-12 mt-3">
+                    <div class="error-msg text-danger small mb-3" style="display: none;"><i class="fas fa-exclamation-triangle mr-1"></i> L'heure de fermeture doit être après l'heure d'ouverture.</div>
+                    <button type="submit" class="btn btn-primary font-weight-bold px-5 py-2 shadow-sm" style="border-radius: 10px;">
+                        <i class="fas fa-check mr-2"></i> Créer l'établissement
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+    {% endif %}
 
         <div class="location-grid">
             {% for location in locations %}
-            <div class="location-card">
+            <div class="location-card shadow-sm border-0" style="background: white; border-radius: 20px;">
                 {% if location.image_data %}<img src="data:image/jpeg;base64,{{ location.image_data|b64encode }}"
-                    class="location-image">
-                {% else %}<div class="location-image d-flex align-items-center justify-content-center bg-light"><i
+                    class="location-image" style="border-bottom: 1px solid #f1f5f9;">
+                {% else %}<div class="location-image d-flex align-items-center justify-content-center bg-light" style="border-bottom: 1px solid #f1f5f9;"><i
                         class="fas fa-image text-muted fa-3x"></i></div>{% endif %}
-                <div class="location-info">
-                    <a href="{{ url_for('location_rooms', location_id=location.id) }}" class="location-name">{{
+                <div class="location-info p-4">
+                    <a href="{{ url_for('location_rooms', location_id=location.id) }}" class="location-name h5 font-weight-bold mb-2 text-dark">{{
                         location.name }}</a>
-                    <div class="location-meta"><i class="fas fa-user-tie mr-2"></i><span>Manager: {{ location.manager_id
-                            if location.manager_id else 'N/A' }}</span></div>
-                    <div class="location-actions">
-                        <a href="{{ url_for('location_rooms', location_id=location.id) }}" class="btn-rooms">Voir les
-                            salles <i class="fas fa-chevron-right ml-1"></i></a>
-                        {% if admin_user.role == 'admin' %}
+                    <div class="location-meta text-muted mb-2"><i class="fas fa-clock mr-2 text-primary"></i><span>{{ location.opening_time.strftime('%H:%M') }} - {{ location.closing_time.strftime('%H:%M') }}</span></div>
+                    <div class="location-meta text-muted mb-2"><i class="fas fa-percent mr-2 text-primary"></i><span>Commission: {{ "{:,.0f}%".format(location.commission_rate * 100) if location.commission_rate else "0%" }}</span></div>
+                    <div class="location-meta text-muted mb-3"><i class="fas fa-user-tie mr-2 text-primary"></i><span>Manager: 
+                        {% if location.manager %}
+                            {{ location.manager.username }}
+                        {% elif location.manager_id %}
+                            {{ location.manager_id[:8] }}...
+                        {% else %}
+                            N/A
+                        {% endif %}</span></div>
+                    
+                    <div class="d-flex justify-content-between align-items-center pt-3 border-top">
+                        <a href="{{ url_for('location_rooms', location_id=location.id) }}" class="btn btn-link p-0 font-weight-bold text-primary">Voir les salles</a>
                         <div class="d-flex">
-                            <button type="button" class="action-btn btn-edit mr-2" data-toggle="modal" data-target="#modalEditLocation{{ location.id }}" title="Modifier"><i class="fas fa-edit"></i></button>
+                            <button type="button" class="btn btn-light btn-sm rounded-circle shadow-sm mr-2" data-toggle="modal" data-target="#modalEditLocation{{ location.id }}" style="width: 35px; height: 35px;"><i class="fas fa-edit text-primary"></i></button>
+                            {% if admin_user.role == 'admin' %}
                             <form action="{{ url_for('delete_location_admin', location_id=location.id) }}" method="POST"
-                                onsubmit="return confirm('Supprimer ?');"><button type="submit" class="action-btn btn-delete"><i
-                                        class="fas fa-trash-alt"></i></button></form>
+                                onsubmit="return confirm('Confirmer la suppression ?');"><button type="submit" class="btn btn-light btn-sm rounded-circle shadow-sm" style="width: 35px; height: 35px;"><i
+                                        class="fas fa-trash-alt text-danger"></i></button></form>
+                            {% endif %}
                         </div>
-                        {% endif %}
                     </div>
                 </div>
             </div>
             {% endfor %}
         </div>
 
-        {% if admin_user.role == 'admin' %}
+
         {% for location in locations %}
         <div class="modal fade" id="modalEditLocation{{ location.id }}" tabindex="-1" role="dialog" aria-hidden="true">
-            <div class="modal-dialog" role="document">
-                <div class="modal-content" style="background: var(--card-bg, #1e1e2e); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;">
-                    <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.1);">
-                        <h5 class="modal-title font-weight-bold text-white">
-                            <i class="fas fa-edit mr-2" style="color: var(--primary);"></i> Modifier : {{ location.name }}
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content border-0" style="border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+                    <div class="modal-header border-0 pb-0">
+                        <h5 class="modal-title font-weight-bold text-dark pt-3 pl-3">
+                            <i class="fas fa-sliders-h mr-2 text-primary"></i> Paramètres du lieu
                         </h5>
-                        <button type="button" class="close text-white" data-dismiss="modal">
+                        <button type="button" class="close px-4 pt-4" data-dismiss="modal">
                             <span>&times;</span>
                         </button>
                     </div>
-                    <div class="modal-body">
-                        <form action="/admin/locations/edit/{{ location.id }}" method="POST">
-                            <div class="form-group">
-                                <label class="small font-weight-bold text-light">Nom de la location</label>
-                                <input type="text" name="name" class="form-control" value="{{ location.name }}" required>
+                    <div class="modal-body p-4">
+                        <form action="/admin/locations/edit/{{ location.id }}" method="POST" class="hour-validation-form">
+                            {% if admin_user.role == 'admin' %}
+                            <div class="form-group mb-3">
+                                <label class="small font-weight-bold text-muted uppercase">Nom de la location</label>
+                                <input type="text" name="name" class="form-control bg-light border-0" value="{{ location.name }}" style="border-radius: 10px;" required>
                             </div>
-                            <div class="form-group">
-                                <label class="small font-weight-bold text-light">Responsable (Space Manager)</label>
-                                <select name="manager_id" class="form-control">
+                            <div class="form-group mb-3">
+                                <label class="small font-weight-bold text-muted uppercase">Responsable</label>
+                                <select name="manager_id" class="form-control bg-light border-0" style="border-radius: 10px;">
                                     <option value="">-- Aucun --</option>
                                     {% for m in managers %}
                                     <option value="{{ m.id }}" {% if location.manager_id == m.id %}selected{% endif %}>{{ m.username }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="d-flex justify-content-end mt-4">
-                                <button type="submit" class="btn-premium btn-add px-4">Enregistrer</button>
+                            <div class="form-group mb-4">
+                                <label class="small font-weight-bold text-muted uppercase">Commission (Admin)</label>
+                                <div class="input-group">
+                                    <input type="number" step="0.01" name="commission_rate" class="form-control bg-light border-0" value="{{ location.commission_rate }}" style="border-radius: 10px 0 0 10px;" required>
+                                    <div class="input-group-append">
+                                        <span class="input-group-text bg-light border-0 text-muted" style="border-radius: 0 10px 10px 0;">%</span>
+                                    </div>
+                                </div>
                             </div>
+                            {% else %}
+                            <input type="hidden" name="name" value="{{ location.name }}">
+                            <input type="hidden" name="manager_id" value="{{ location.manager_id if location.manager_id else '' }}">
+                            <input type="hidden" name="commission_rate" value="{{ location.commission_rate }}">
+                            {% endif %}
+                            
+                            <div class="p-3 bg-light mb-4" style="border-radius: 15px;">
+                                <h6 class="small font-weight-bold text-primary mb-3">HORAIRES D'OUVERTURE</h6>
+                                <div class="form-row">
+                                    <div class="form-group col-6 mb-0">
+                                        <label class="small text-muted">Début</label>
+                                        <input type="time" name="opening_time" class="form-control border-0 start-time" value="{{ location.opening_time.strftime('%H:%M') if location.opening_time else '08:00' }}" style="border-radius: 8px;" required>
+                                    </div>
+                                    <div class="form-group col-6 mb-0">
+                                        <label class="small text-muted">Fin</label>
+                                        <input type="time" name="closing_time" class="form-control border-0 end-time" value="{{ location.closing_time.strftime('%H:%M') if location.closing_time else '20:00' }}" style="border-radius: 8px;" required>
+                                    </div>
+                                </div>
+                                <div class="error-msg text-danger small mt-2" style="display: none;"><i class="fas fa-exclamation-triangle mr-1"></i> L'heure de fin doit être après le début.</div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary btn-block font-weight-bold py-3 shadow-sm" style="border-radius: 12px;">Appliquer les modifications</button>
                         </form>
                     </div>
                 </div>
             </div>
         </div>
         {% endfor %}
-        {% endif %}
 
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.querySelectorAll('.hour-validation-form').forEach(form => {
+    form.addEventListener('submit', function(e) {
+        const start = this.querySelector('.start-time').value;
+        const end = this.querySelector('.end-time').value;
+        const errorDiv = this.querySelector('.error-msg');
+
+        if (start && end && start >= end) {
+            e.preventDefault();
+            errorDiv.style.display = 'block';
+            this.querySelector('.end-time').classList.add('is-invalid');
+        } else {
+            errorDiv.style.display = 'none';
+            this.querySelector('.end-time').classList.remove('is-invalid');
+        }
+    });
+});
+</script>
 {% endblock %}

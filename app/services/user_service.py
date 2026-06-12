@@ -74,8 +74,20 @@ def delete_user(uid: str):
     user = get_user_by_uid(uid)
     if not user:
         return False
+        
+    firebase_uid = user.firebase_uid
+    
     db.session.delete(user)
     db.session.commit()
+    
+    # Supprimer aussi de Firebase pour éviter les comptes fantômes
+    if firebase_uid:
+        try:
+            from firebase_admin import auth as firebase_auth
+            firebase_auth.delete_user(firebase_uid)
+        except Exception as e:
+            print(f"Erreur Firebase lors de la suppression du user : {str(e)}")
+            
     return True
 
 
@@ -102,7 +114,7 @@ def local_signup_request(data: dict):
     }
 
     # Envoyer le code par email
-    sent = send_verification_email(email, code, username=data["username"])
+    sent = send_verification_email(email, code, username=data["username"], action="signup")
     if not sent:
         return {"error": "Erreur lors de l'envoi de l'email"}, 500
 
@@ -157,12 +169,11 @@ def local_login(email: str, password: str):
     email = email.lower().strip()
     user = get_user_by_email(email)
 
-    
-    if user.role == "admin" or user.role == "space_manager":
-        return {"error": "Vous n'avez pas accès à cette fonctionnalité"}, 403
-
     if not user:
         return {"error": "Email ou mot de passe incorrect"}, 401
+
+    if user.role == "admin" or user.role == "space_manager":
+        return {"error": "Vous n'avez pas accès à cette fonctionnalité"}, 403
 
     if user.auth_provider != "local" and not user.hashed_password:
         return {"error": f"Ce compte utilise {user.auth_provider}. Connectez-vous via Google/Firebase."}, 400
@@ -357,7 +368,7 @@ def forgot_password_request_logic(email: str):
     reset_password_codes[email] = code
 
     # Envoyer le code par email
-    sent = send_verification_email(email, code, username=user.username)
+    sent = send_verification_email(email, code, username=user.username, action="reset_password")
     if not sent:
         return {"error": "Erreur lors de l'envoi de l'email"}, 500
 
@@ -417,11 +428,15 @@ def request_email_update_logic(uid: str, new_email: str):
     if get_user_by_email(new_email):
         return {"error": "Cet email est déjà utilisé"}, 409
     
+    # Anti-double appel : si un code est déjà en attente pour cet email/uid, ne pas régénérer
+    if new_email in verification_codes and pending_email_updates.get(new_email) == uid:
+        return {"message": "Un code a déjà été envoyé. Vérifiez votre boîte email.", "email": new_email}, 200
+
     code = generate_code()
     verification_codes[new_email] = code
     pending_email_updates[new_email] = uid
     
-    sent = send_verification_email(new_email, code, username=user.username)
+    sent = send_verification_email(new_email, code, username=user.username, action="update_email")
     if not sent:
         return {"error": "Erreur lors de l'envoi de l'email"}, 500
         
@@ -445,14 +460,39 @@ def confirm_email_update_logic(uid: str, code: str):
     if not user:
         return {"error": "Utilisateur introuvable"}, 404
         
+    # Mettre à jour l'email dans Firebase Auth si l'utilisateur est lié à Firebase/Google
+    # → firebase_uid reste intact, seul l'email change dans Firebase
+    if user.firebase_uid:
+        try:
+            from firebase_admin import auth as firebase_auth
+
+            # 1. Changer l'email dans Firebase
+            firebase_auth.update_user(
+                user.firebase_uid,
+                email=target_email
+            )
+
+            # 2. ⚡ Révoquer TOUS les refresh tokens existants pour cet utilisateur.
+            # Cela invalide immédiatement les anciens tokens (y compris ceux avec l'ancien email).
+            # L'utilisateur devra se reconnecter avec le NOUVEL email uniquement.
+            firebase_auth.revoke_refresh_tokens(user.firebase_uid)
+            print(f"[FIREBASE] Refresh tokens révoqués pour l'utilisateur {user.firebase_uid} après changement d'email.")
+
+        except Exception as e:
+            error_msg = str(e)
+            if "EMAIL_EXISTS" in error_msg:
+                return {"error": "Cet email est déjà utilisé par un autre compte."}, 409
+            print(f"[FIREBASE] Avertissement lors de la mise à jour de l'email : {error_msg}")
+            # On continue quand même — l'email local sera mis à jour
+
     user.email = target_email
     save_user(user)
-    
+
     if target_email in verification_codes:
         del verification_codes[target_email]
     if target_email in pending_email_updates:
         del pending_email_updates[target_email]
-    
+
     return {"message": "Email mis à jour avec succès", "email": target_email}, 200
 
 def _user_to_dict(user) -> dict:
@@ -475,7 +515,10 @@ def firebase_auth_or_create(firebase_token: str, phone_fallback: str = None):
     """
     from firebase_admin import auth as firebase_auth
     try:
-        decoded = firebase_auth.verify_id_token(firebase_token)
+        # check_revoked=True → invalide immédiatement les tokens révoqués après changement d'email
+        decoded = firebase_auth.verify_id_token(firebase_token, check_revoked=True)
+    except firebase_auth.RevokedIdTokenError:
+        return {"error": "Session expirée. Veuillez vous reconnecter avec votre nouvel email."}, 401
     except Exception as e:
         return {"error": f"Token Firebase invalide : {str(e)}"}, 401
 
@@ -487,21 +530,24 @@ def firebase_auth_or_create(firebase_token: str, phone_fallback: str = None):
     # 1. Chercher par firebase_uid
     user = get_user_by_firebase_uid(firebase_uid)
 
-    # 2. Sinon, chercher par email
+    # 2. Sinon, chercher par email (seulement si l'email n'est pas déjà lié à un autre firebase_uid)
     if not user and email:
         user = get_user_by_email(email)
-        if user:
+        if user and not user.firebase_uid:
             # Lier le compte local existant à Firebase
             user.firebase_uid = firebase_uid
             user.auth_provider = "firebase"
             if phone and not user.phone:
                 user.phone = phone
             save_user(user)
+        elif user and user.firebase_uid and user.firebase_uid != firebase_uid:
+            # Conflit : l'email appartient à un autre compte Firebase
+            return {"error": "Cet email est déjà associé à un autre compte."}, 409
 
     # 3. Sinon, chercher par téléphone
     if not user and phone:
         user = get_user_by_phone(phone)
-        if user:
+        if user and not user.firebase_uid:
             user.firebase_uid = firebase_uid
             user.auth_provider = "firebase"
             if email and not user.email:

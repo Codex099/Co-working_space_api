@@ -4,6 +4,30 @@ from datetime import datetime, timedelta, time
 import base64
 
 
+
+# ─── Utils ───────────────────────────────────────────
+def get_room_schedule(room_id):
+    from models.domain import Room
+    from datetime import time as dtime
+    room = Room.query.get(room_id)
+    if room and room.location:
+        return room.location.opening_time, room.location.closing_time, room.location.commission_rate, room.location.manager_id
+    return dtime(8, 0), dtime(20, 0), 0.15, None
+
+def log_manager_earning(db_session, booking_id, amount, commission_rate, manager_id):
+    from models.domain import SpaceManagerEarning
+    if manager_id and amount:
+        commission = round(amount * commission_rate, 2)
+        net = round(amount - commission, 2)
+        earning = SpaceManagerEarning(
+            booking_id=booking_id,
+            manager_id=manager_id,
+            gross_amount=amount,
+            commission_amount=commission,
+            net_amount=net
+        )
+        db_session.add(earning)
+
 # ─── Booking Types ───────────────────────────────────────────
 
 def get_booking_types_by_room(room_id):
@@ -127,9 +151,10 @@ def create_booking(data):
         if user.balance < total_price:
             return {"error": "Solde insuffisant"}, 402
 
-        start_dt = datetime.combine(date_obj, time(8, 0))
+        loc_op, loc_cl, loc_comm, loc_mgr = get_room_schedule(bt.room_id)
+        start_dt = datetime.combine(date_obj, loc_op)
         end_dt = start_dt + timedelta(days=4)
-        end_dt = datetime.combine(end_dt.date(), time(20, 0))
+        end_dt = datetime.combine(end_dt.date(), loc_cl)
 
         # Vérifier la disponibilité de la plage entière (en une seule requête via is_available)
         if not is_available(bt.room_id, start_dt, int((end_dt - start_dt).total_seconds() / 60)):
@@ -157,6 +182,7 @@ def create_booking(data):
             amount=-total_price,
             ref_id=booking.id
         )
+        log_manager_earning(db.session, booking.id, total_price, loc_comm, loc_mgr)
         db.session.commit()
         return {"message": "Réservations de semaine créées avec succès", "booking_ids": [booking.id]}, 201
 
@@ -166,8 +192,9 @@ def create_booking(data):
         if user.balance < total_price:
             return {"error": "Solde insuffisant"}, 402
 
-        start_dt = datetime.combine(date_obj, time(8, 0))
-        end_dt = datetime.combine(date_obj, time(20, 0))
+        loc_op, loc_cl, loc_comm, loc_mgr = get_room_schedule(bt.room_id)
+        start_dt = datetime.combine(date_obj, loc_op)
+        end_dt = datetime.combine(date_obj, loc_cl)
         
         if not is_available(bt.room_id, start_dt, 720):
             return {"error": f"La salle n'est pas disponible pour la journée du {date_obj.strftime('%Y-%m-%d')}"}, 409
@@ -194,11 +221,13 @@ def create_booking(data):
             amount=-total_price,
             ref_id=booking.id
         )
+        log_manager_earning(db.session, booking.id, total_price, loc_comm, loc_mgr)
         db.session.commit()
         return {"message": "Réservation de journée créée avec succès", "booking_ids": [booking.id]}, 201
 
     # ─── Cas 3: Réservation Horaire et Demi-journée (durée <= 300 min) ───
     else:
+        loc_op, loc_cl, loc_comm, loc_mgr = get_room_schedule(bt.room_id)
         start_time_str = data.get('start_time')
         end_time_str = data.get('end_time')
 
@@ -279,6 +308,7 @@ def create_booking(data):
                 amount=-total_price,
                 ref_id=left_booking.id
             )
+            log_manager_earning(db.session, left_booking.id, total_price, loc_comm, loc_mgr)
             created_booking_ids.append(left_booking.id)
 
         elif left_booking:
@@ -293,6 +323,7 @@ def create_booking(data):
                 amount=-total_price,
                 ref_id=left_booking.id
             )
+            log_manager_earning(db.session, left_booking.id, total_price, loc_comm, loc_mgr)
             created_booking_ids.append(left_booking.id)
 
         elif right_booking:
@@ -307,6 +338,7 @@ def create_booking(data):
                 amount=-total_price,
                 ref_id=right_booking.id
             )
+            log_manager_earning(db.session, right_booking.id, total_price, loc_comm, loc_mgr)
             created_booking_ids.append(right_booking.id)
 
         else:
@@ -328,6 +360,7 @@ def create_booking(data):
                 amount=-total_price,
                 ref_id=booking.id
             )
+            log_manager_earning(db.session, booking.id, total_price, loc_comm, loc_mgr)
             created_booking_ids.append(booking.id)
 
         db.session.commit()
@@ -446,6 +479,21 @@ def cancel_booking(booking_id: int, user_uid: str):
     db.session.add(booking)
     db.session.flush()
 
+    # 7.5 Mettre à jour les revenus du Space Manager
+    # Le manager gagne maintenant une commission sur la partie non-remboursée (pénalité)
+    remaining_amount = total_price - refund_amount
+    earning_list = getattr(booking, 'earning', [])
+    if earning_list:
+        commission_rate = 0.15
+        if booking.room and booking.room.location:
+            commission_rate = booking.room.location.commission_rate
+            
+        for e in earning_list:
+            e.gross_amount      = remaining_amount
+            e.commission_amount = round(remaining_amount * commission_rate, 2)
+            e.net_amount        = round(remaining_amount - e.commission_amount, 2)
+            db.session.add(e)
+
     # 8. Enregistrer la transaction de remboursement
     insert_balance_tx(
         db_session=db.session,
@@ -489,21 +537,24 @@ def get_occupied_slots(room_id, booking_type_id=None, date_str=None, start_date_
 
         occupied_slots = []
         if duration is not None and duration <= 720:
-            opening = datetime.combine(date_obj, time(8, 0))
-            closing = datetime.combine(date_obj, time(20, 0))
+            loc_op, loc_cl, _, _ = get_room_schedule(room_id)
+            opening = datetime.combine(date_obj, loc_op)
+            closing = datetime.combine(date_obj, loc_cl)
             current = opening
             while current + timedelta(minutes=duration) <= closing:
                 if not is_available(room_id, current, duration):
                     occupied_slots.append(current.strftime("%H:%M"))
                 current += timedelta(minutes=duration)
         elif duration is not None and duration > 720:
-            start_dt = datetime.combine(date_obj, time(8, 0))
+            loc_op, loc_cl, _, _ = get_room_schedule(room_id)
+            start_dt = datetime.combine(date_obj, loc_op)
             if not is_available(room_id, start_dt, duration):
-                occupied_slots.append("08:00")
+                occupied_slots.append(loc_op.strftime('%H:%M'))
         else:
             # Pas de booking_type_id fourni : vérifier si la journée est occupée
-            start_dt = datetime.combine(date_obj, time(8, 0))
-            end_dt   = datetime.combine(date_obj, time(20, 0))
+            loc_op, loc_cl, _, _ = get_room_schedule(room_id)
+            start_dt = datetime.combine(date_obj, loc_op)
+            end_dt   = datetime.combine(date_obj, loc_cl)
             bookings_day = Booking.query.filter(
                 Booking.room_id == room_id,
                 Booking.start_time < end_dt,
@@ -547,8 +598,9 @@ def get_occupied_slots(room_id, booking_type_id=None, date_str=None, start_date_
         except ValueError:
             return {"error": "Format de end_date invalide (YYYY-MM-DD)"}, 400
 
-    opening_time = time(8, 0)
-    closing_time = time(20, 0)
+    loc_op, loc_cl, _, _ = get_room_schedule(room_id)
+    opening_time = loc_op
+    closing_time = loc_cl
 
     # ─── Semaine : retourner les plages de semaines occupées ───
     if duration is not None and duration > 720:
@@ -578,7 +630,8 @@ def get_occupied_slots(room_id, booking_type_id=None, date_str=None, start_date_
                 current = w_start
                 while current <= w_end:
                     covered_dates.add(current)
-                    occupied_slots_dict[current.strftime("%Y-%m-%d")] = ["08:00"]
+                    loc_op, loc_cl, _, _ = get_room_schedule(room_id)
+                    occupied_slots_dict[current.strftime("%Y-%m-%d")] = [loc_op.strftime('%H:%M')]
                     current += timedelta(days=1)
 
         return {
@@ -611,7 +664,7 @@ def get_occupied_slots(room_id, booking_type_id=None, date_str=None, start_date_
                 Booking.end_time   > opening
             ).all()
             if all_bookings_day:
-                day_occupied.append("08:00")
+                day_occupied.append(opening_time.strftime('%H:%M'))
         else:
             opening = datetime.combine(current_date, opening_time)
             closing = datetime.combine(current_date, closing_time)

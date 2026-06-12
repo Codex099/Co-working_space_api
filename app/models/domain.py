@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, Time, DateTime, LargeBinary, Boolean, Text
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, time as dtime
 from db.database import Base, db, db_session
 import uuid
 
@@ -54,8 +54,12 @@ class Location(Base):
     name       = Column(String(100), nullable=False)
     image_data = Column(LargeBinary, nullable=True)
     manager_id = Column(String(36), ForeignKey('users.id'), nullable=True) # ID of the Space Manager
+    commission_rate = Column(Float, default=0.15)
+    opening_time    = Column(Time, default=dtime(8, 0))
+    closing_time    = Column(Time, default=dtime(20, 0))
+    
+    manager = relationship('User', foreign_keys=[manager_id])
     rooms      = relationship('Room', backref='location', cascade="all, delete-orphan")
-
 
 class Room(Base):
     __tablename__ = 'rooms'
@@ -100,3 +104,30 @@ class Recharge(Base):
     user_id = Column(String(36), ForeignKey('users.id'), nullable=False)  # FK vers users.id (UUID)
     amount  = Column(Float, nullable=False)
     date    = Column(DateTime, default=datetime.utcnow)
+
+    
+class SpaceManagerEarning(Base):
+    __tablename__ = 'space_manager_earning'
+    id      = Column(Integer, primary_key=True)
+    booking_id = Column(Integer, ForeignKey('bookings.id'), nullable=False)  # FK vers bookings.id (UUID)
+    manager_id = Column(String(36), ForeignKey('users.id'), nullable=False)  # FK vers users.id (UUID)
+    gross_amount  = Column(Float, nullable=False)
+    commission_amount  = Column(Float, nullable=False)
+    net_amount  = Column(Float, nullable=False)
+    created_at    = Column(DateTime, default=datetime.utcnow)
+    settlement_id = Column(Integer, ForeignKey('settlements.id'), nullable=True)
+
+    booking = relationship('Booking', backref='earning')
+
+
+class Settlement(Base):
+    __tablename__ = 'settlements'
+    id          = Column(Integer, primary_key=True)
+    manager_id  = Column(String(36), ForeignKey('users.id'), nullable=False)
+    amount_paid = Column(Float, nullable=False) # The net amount actually paid to manager
+    total_commission = Column(Float, nullable=False) # Commission "cleared" by this settlement
+    notes       = Column(Text, nullable=True)
+    created_at  = Column(DateTime, default=datetime.utcnow)
+
+    manager  = relationship('User', foreign_keys=[manager_id])
+    earnings = relationship('SpaceManagerEarning', backref='settlement_ref')

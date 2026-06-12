@@ -7,7 +7,7 @@
 
 {% block content %}
         <div class="premium-card">
-            <form method="get" class="form-row align-items-center">
+            <form id="filter-form" method="get" class="form-row align-items-center">
                 <div class="col-md-3 col-sm-12 mb-2 mb-md-0">
                     <div class="search-wrapper"><i class="fas fa-search text-muted mr-3"></i><input type="text" name="search_email" class="form-control search-input" placeholder="Email..." value="{{ request.query_params.get('search_email', '') }}"></div>
                 </div>
@@ -19,43 +19,69 @@
                         <i class="fas fa-filter text-muted mr-3"></i>
                         <select name="search_status" class="form-control border-0 p-0 shadow-none bg-transparent">
                             <option value="">Tous les statuts</option>
-                            <option value="confirmed" {% if request.query_params.get('search_status') == 'confirmed' %}selected{% endif %}>Confirmée / Prochaine</option>
+                            <option value="upcoming" {% if request.query_params.get('search_status') == 'upcoming' %}selected{% endif %}>Prochaine</option>
+                            <option value="confirmed" {% if request.query_params.get('search_status') == 'confirmed' %}selected{% endif %}>Confirmée</option>
                             <option value="cancelled" {% if request.query_params.get('search_status') == 'cancelled' %}selected{% endif %}>Annulée</option>
                         </select>
                     </div>
                 </div>
-                <div class="col-md-2 col-sm-12"><button type="submit" class="btn-premium btn-search w-100">Filtrer</button></div>
-
+                <div class="col-md-2 col-sm-12">
+                    <button type="submit" class="btn-premium btn-search w-100" id="filter-btn">
+                        <span class="btn-text">Filtrer</span>
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                    </button>
+                </div>
             </form>
         </div>
 
-        <div class="table-responsive">
-            <table class="table">
-                <thead><tr><th>Utilisateur</th><th>Salle</th><th>Type</th><th>Début</th><th>Fin</th><th>Prix Total</th><th>Date</th><th>Statut</th></tr></thead>
-                <tbody>
-                    {% for booking in bookings %}
-                    <tr>
-                        <td><div class="user-email text-nowrap">{{ booking.user.email }}</div><small class="text-muted text-nowrap">{{ booking.user.username }}</small></td>
-                        <td><span class="room-name text-nowrap">{{ booking.room.name }}</span></td>
-                        <td><span class="price-badge text-nowrap">{{ booking.booking_type.name }}</span></td>
-                        <td><span class="time-badge"><i class="far fa-clock mr-2"></i> {{ booking.start_time.strftime('%H:%M') }}</span></td>
-                        <td>
-                            <span class="time-badge"><i class="fas fa-flag-checkered mr-2"></i> {{ booking.end_time.strftime('%H:%M') }}</span>
-                        </td>
-                        <td class="text-nowrap"><span class="price-text">{{ booking.total_price }} DA</span></td>
-                        <td class="text-nowrap"><div class="small font-weight-bold">{{ booking.start_time.strftime('%d/%m/%Y') }}</div></td>
-                        <td class="text-nowrap">
-                            {% if booking.status == 'cancelled' %}
-                                <span class="badge badge-danger px-3 py-2" style="border-radius: 8px;">Annulée</span>
-                            {% elif booking.status == 'upcoming' %}
-                                <span class="badge badge-info px-3 py-2" style="border-radius: 8px; background-color: #6366f1;">Prochaine</span>
-                            {% else %}
-                                <span class="badge badge-success px-3 py-2" style="border-radius: 8px;">Confirmée</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="table-responsive" id="bookings-table-container">
+            {% include 'partials/bookings_table.html' %}
         </div>
+
+        <style>
+            .loading-fade { opacity: 0.5; pointer-events: none; transition: 0.2s; }
+        </style>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const form = document.getElementById('filter-form');
+                const container = document.getElementById('bookings-table-container');
+                const btn = document.getElementById('filter-btn');
+                const btnText = btn.querySelector('.btn-text');
+                const spinner = btn.querySelector('.spinner-border');
+
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    // Visual feedback
+                    container.classList.add('loading-fade');
+                    btnText.classList.add('d-none');
+                    spinner.classList.remove('d-none');
+                    btn.disabled = true;
+
+                    const formData = new FormData(form);
+                    const params = new URLSearchParams(formData).toString();
+                    const url = `${window.location.pathname}?${params}`;
+
+                    fetch(url, {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(response => response.text())
+                    .then(html => {
+                        container.innerHTML = html;
+                        // Update URL without reload
+                        window.history.pushState({}, '', url);
+                    })
+                    .catch(error => console.error('Error:', error))
+                    .finally(() => {
+                        container.classList.remove('loading-fade');
+                        btnText.classList.remove('d-none');
+                        spinner.classList.add('d-none');
+                        btn.disabled = false;
+                    });
+                });
+            });
+        </script>
 {% endblock %}
