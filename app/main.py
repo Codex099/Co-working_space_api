@@ -35,6 +35,9 @@ async def db_session_middleware(request: Request, call_next):
     try:
         response = await call_next(request)
         return response
+    except Exception:
+        db_session.rollback()
+        raise
     finally:
         db_session.remove()  #libérer la connexion
 

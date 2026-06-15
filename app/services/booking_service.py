@@ -270,7 +270,7 @@ def create_booking(data):
         db.session.add(user)
 
         created_booking_ids = []
-        from models.domain import BalanceTransaction
+        from models.domain import BalanceTransaction, SpaceManagerEarning
 
         # Rechercher des réservations existantes adjacentes en BD (avec DateTime)
         existing_bookings = db.session.query(Booking).filter(
@@ -297,6 +297,11 @@ def create_booking(data):
                 BalanceTransaction.ref_id == right_booking.id,
                 BalanceTransaction.type == 'booking'
             ).update({BalanceTransaction.ref_id: left_booking.id}, synchronize_session=False)
+
+            # Update manager earnings to point to the new main booking
+            db.session.query(SpaceManagerEarning).filter(
+                SpaceManagerEarning.booking_id == right_booking.id
+            ).update({SpaceManagerEarning.booking_id: left_booking.id}, synchronize_session=False)
 
             db.session.delete(right_booking)
             db.session.flush()
@@ -482,7 +487,7 @@ def cancel_booking(booking_id: int, user_uid: str):
     # 7.5 Mettre à jour les revenus du Space Manager
     # Le manager gagne maintenant une commission sur la partie non-remboursée (pénalité)
     remaining_amount = total_price - refund_amount
-    earning_list = getattr(booking, 'earning', [])
+    earning_list = getattr(booking, 'earnings', [])
     if earning_list:
         commission_rate = 0.15
         if booking.room and booking.room.location:

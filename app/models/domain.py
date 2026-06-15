@@ -96,6 +96,7 @@ class Booking(Base):
     status          = Column(String(20), nullable=False, default='upcoming')  # 'upcoming' | 'confirmed' | 'cancelled'
     cancelled_at    = Column(DateTime, nullable=True)
     refund_amount   = Column(Float, nullable=True)
+    earnings        = relationship('SpaceManagerEarning', backref='associated_booking', cascade="all, delete-orphan")
 
 
 class Recharge(Base):
@@ -117,7 +118,7 @@ class SpaceManagerEarning(Base):
     created_at    = Column(DateTime, default=datetime.utcnow)
     settlement_id = Column(Integer, ForeignKey('settlements.id'), nullable=True)
 
-    booking = relationship('Booking', backref='earning')
+    # relationship defined in Booking to support cascade delete
 
 
 class Settlement(Base):
