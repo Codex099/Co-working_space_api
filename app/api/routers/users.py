@@ -163,6 +163,10 @@ def get_user_by_email_route(email: str, current_user: dict = Depends(get_current
 
 @router.patch('/me/password', tags=["update"])
 def update_password_route(data: UpdatePasswordRequest, current_user: dict = Depends(get_current_user)):
+    if current_user.get("provider") == "firebase":
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Connecter avec Google")
+
     resp, code = update_password_logic(
         uid=current_user["uid"],
         new_password=data.new_password,
@@ -172,6 +176,10 @@ def update_password_route(data: UpdatePasswordRequest, current_user: dict = Depe
 
 @router.post('/me/email/request', tags=["update"])
 def request_email_update_route(data: UpdateEmailRequest, current_user: dict = Depends(get_current_user)):
+    if current_user.get("provider") == "firebase":
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Connecter avec Google")
+
     resp, code = request_email_update_logic(current_user["uid"], data.new_email)
     return JSONResponse(content=resp, status_code=code)
 

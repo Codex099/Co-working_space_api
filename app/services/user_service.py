@@ -345,9 +345,13 @@ def update_password_logic(uid: str,new_password: str, old_password: str = None )
     if not user:
         return {"error": "Utilisateur introuvable"}, 404
     
+    # Restriction Firebase
+    if user.auth_provider != "local":
+        return {"error": "Connecter avec Google"}, 403
+
     # Si un mot de passe existe déjà (même pour un compte Firebase), la vérification de l'ancien est obligatoire
     if user.hashed_password:
-        
+        if not old_password or not verify_password(old_password, user.hashed_password):
             return {"error": "Ancien mot de passe incorrect"}, 401
     
     user.hashed_password = hash_password(new_password)
@@ -363,6 +367,10 @@ def forgot_password_request_logic(email: str):
     
     if not user:
         return {"error": "Aucun utilisateur trouvé avec cet email"}, 404
+
+    # Restriction Firebase
+    if user.auth_provider != "local":
+        return {"error": "Connecter avec Google"}, 403
 
     code = generate_code()
     reset_password_codes[email] = code
@@ -423,6 +431,10 @@ def request_email_update_logic(uid: str, new_email: str):
     user = get_user_by_uid(uid)
     if not user:
         return {"error": "Utilisateur introuvable"}, 404
+    
+    # Restriction Firebase
+    if user.auth_provider != "local":
+        return {"error": "Connecter avec Google"}, 403
     
     new_email = new_email.lower().strip()
     if get_user_by_email(new_email):
