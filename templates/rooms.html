@@ -129,7 +129,7 @@
                         <td class="text-nowrap">{{ room.capacity }} pers.</td>
                         <td>
                             {% for bt in room.booking_types %}
-                                <span class="price-badge mr-1">{{ bt.name }} — {{ bt.price }} DA ({{ bt.duration_minutes }} min)</span>
+                                <span class="price-badge mr-1">{{ bt.name }} — {{ bt.price }} DA ({{ bt.resolved_duration_minutes }} min)</span>
                             {% else %}
                                 <span class="text-muted small">Aucun type</span>
                             {% endfor %}
@@ -235,7 +235,7 @@
                                      style="background:#f8f9fa;">
                                     <div>
                                         <div class="font-weight-bold text-dark">{{ bt.name }}</div>
-                                        <small class="text-muted">{{ bt.duration_minutes }} min • <strong class="text-success">{{ bt.price }} DA</strong></small>
+                                        <small class="text-muted">{{ bt.resolved_duration_minutes }} min • <strong class="text-success">{{ bt.price }} DA</strong></small>
                                     </div>
                                     <div class="d-flex">
                                         <button type="button" class="action-btn btn-edit mr-2"

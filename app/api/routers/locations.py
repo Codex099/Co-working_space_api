@@ -38,7 +38,7 @@ def get_room_booking_types_route(room_id: int):
         {
             "id":               bt.id,
             "name":             bt.name,
-            "duration_minutes": bt.duration_minutes,
+            "duration_minutes": bt.resolved_duration_minutes,
             "price":            bt.price,
             "is_active":        bt.is_active
         }
@@ -55,7 +55,7 @@ def create_booking_type_route(data: BookingTypeCreate):
         "message":          "Type créé",
         "id":               bt.id,
         "name":             bt.name,
-        "duration_minutes": bt.duration_minutes,
+        "duration_minutes": bt.resolved_duration_minutes,
         "price":            bt.price
     }, status_code=201)
 

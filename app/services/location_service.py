@@ -60,11 +60,22 @@ def get_all_locations_logic():
         image_base64 = None
         if loc.image_data:
             image_base64 = base64.b64encode(loc.image_data).decode('utf-8')
+            
+        mid_time = None
+        if loc.opening_time and loc.closing_time:
+            from datetime import datetime, timedelta
+            dummy = datetime.today().date()
+            op_dt = datetime.combine(dummy, loc.opening_time)
+            cl_dt = datetime.combine(dummy, loc.closing_time)
+            total_minutes = int((cl_dt - op_dt).total_seconds() / 60)
+            mid_time = (op_dt + timedelta(minutes=total_minutes // 2)).time().strftime('%H:%M')
+
         result.append({
             "id": loc.id,
             "name": loc.name,
             "opening_time": loc.opening_time.strftime('%H:%M') if loc.opening_time else None,
             "closing_time": loc.closing_time.strftime('%H:%M') if loc.closing_time else None,
+            "mid_time": mid_time,
             "image_base64": image_base64
         })
     return result, 200
@@ -76,6 +87,20 @@ def get_rooms_by_location_name(location_name):
 
     rooms = [room for room in get_all_rooms() if room.location_id == location.id]
     result = []
+    
+    mid_time = None
+    op_time_str = None
+    cl_time_str = None
+    if location.opening_time and location.closing_time:
+        from datetime import datetime, timedelta
+        dummy = datetime.today().date()
+        op_dt = datetime.combine(dummy, location.opening_time)
+        cl_dt = datetime.combine(dummy, location.closing_time)
+        total_minutes = int((cl_dt - op_dt).total_seconds() / 60)
+        mid_time = (op_dt + timedelta(minutes=total_minutes // 2)).time().strftime('%H:%M')
+        op_time_str = location.opening_time.strftime('%H:%M')
+        cl_time_str = location.closing_time.strftime('%H:%M')
+
     for room in rooms:
         image_base64 = None
         if getattr(room, "image_data", None):
@@ -85,7 +110,7 @@ def get_rooms_by_location_name(location_name):
             {
                 "id": bt.id,
                 "name": bt.name,
-                "duration_minutes": bt.duration_minutes,
+                "duration_minutes": bt.resolved_duration_minutes,
                 "price": bt.price,
                 "is_active": bt.is_active
             }
@@ -97,6 +122,9 @@ def get_rooms_by_location_name(location_name):
             "name": room.name,
             "capacity": room.capacity,
             "booking_types": booking_types,
-            "image_base64": image_base64
+            "image_base64": image_base64,
+            "opening_time": op_time_str,
+            "closing_time": cl_time_str,
+            "mid_time": mid_time
         })
     return result, 200

@@ -684,9 +684,10 @@ async def edit_location_admin(
     admin_user = Depends(get_admin_user_from_cookie)
 ):
     from models.domain import Location
-    from db.database import db
+    from db.database import db, db_session
     from datetime import datetime as dt
     
+    db_session.expire_all()  # ← Vide le cache pour forcer un rechargement depuis la DB
     loc = Location.query.get(location_id)
     if not loc:
         return RedirectResponse(url=request.url_for('locations_page'), status_code=303)
@@ -712,13 +713,16 @@ async def edit_location_admin(
                 
             loc.opening_time = op_time
             loc.closing_time = cl_time
-            db.session.commit()
+            db.session.flush()   # ← Force l'écriture en attente dans la transaction
+            db.session.commit()  # ← Confirme la transaction dans la DB
+            db_session.expire_all()  # ← Vide le cache après commit
             
         except ValueError:
             error_msg = "Format d'heure invalide."
             return RedirectResponse(url=f"{request.url_for('locations_page')}?{urlencode({'error': error_msg})}", status_code=303)
         
     return RedirectResponse(url=request.url_for('locations_page'), status_code=303)
+
 
 @admin_bp.get('/users/{user_uid}', response_class=HTMLResponse)
 def user_detail(request: Request, user_uid: str, admin_user = Depends(get_admin_user_from_cookie)):

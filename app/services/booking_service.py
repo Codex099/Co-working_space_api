@@ -257,7 +257,39 @@ def create_booking(data):
         if not is_available(bt.room_id, start_dt, duration_minutes):
             return {"error": f"La plage horaire de {start_time_str} à {end_time_str} n'est pas disponible"}, 409
 
-        slots_count = duration_minutes / bt.duration_minutes
+        is_half_day = bt.name and ("half-day" in bt.name.lower() or "demi" in bt.name.lower())
+        if is_half_day:
+            dummy_date = datetime.today().date()
+            op_dt = datetime.combine(dummy_date, loc_op)
+            cl_dt = datetime.combine(dummy_date, loc_cl)
+            total_day_minutes = int((cl_dt - op_dt).total_seconds() / 60)
+            half_duration_minutes = total_day_minutes // 2
+            mid_dt = op_dt + timedelta(minutes=half_duration_minutes)
+            mid_time = mid_dt.time()
+
+            def time_to_min(t):
+                return t.hour * 60 + t.minute
+
+            start_min = time_to_min(start_time_obj)
+            end_min = time_to_min(end_time_obj)
+            op_min = time_to_min(loc_op)
+            cl_min = time_to_min(loc_cl)
+            mid_min = time_to_min(mid_time)
+
+            is_slot1 = (start_min == op_min and end_min == mid_min)
+            is_slot2 = (start_min == mid_min and end_min == cl_min)
+            is_both = (start_min == op_min and end_min == cl_min)
+
+            if not (is_slot1 or is_slot2 or is_both):
+                return {
+                    "error": f"Pour une demi-journée, vous devez réserver soit de {loc_op.strftime('%H:%M')} à {mid_time.strftime('%H:%M')}, "
+                             f"soit de {mid_time.strftime('%H:%M')} à {loc_cl.strftime('%H:%M')}."
+                }, 400
+
+            slots_count = 2.0 if is_both else 1.0
+        else:
+            slots_count = duration_minutes / bt.duration_minutes
+
         if slots_count <= 0:
             return {"error": "Durée invalide"}, 400
 
@@ -533,6 +565,8 @@ def get_occupied_slots(room_id, booking_type_id=None, date_str=None, start_date_
             return {"error": "Type de réservation invalide pour cette salle"}, 400
         duration = bt.duration_minutes
 
+    is_half_day = bt and bt.name and ("half-day" in bt.name.lower() or "demi" in bt.name.lower())
+
     # Cas 1: Date unique spécifiée
     if date_str:
         try:
@@ -541,15 +575,34 @@ def get_occupied_slots(room_id, booking_type_id=None, date_str=None, start_date_
             return {"error": "Format de date invalide (YYYY-MM-DD)"}, 400
 
         occupied_slots = []
-        if duration is not None and duration <= 720:
+        if duration is not None:
             loc_op, loc_cl, _, _ = get_room_schedule(room_id)
-            opening = datetime.combine(date_obj, loc_op)
-            closing = datetime.combine(date_obj, loc_cl)
-            current = opening
-            while current + timedelta(minutes=duration) <= closing:
-                if not is_available(room_id, current, duration):
-                    occupied_slots.append(current.strftime("%H:%M"))
-                current += timedelta(minutes=duration)
+            if is_half_day:
+                dummy_date = datetime.today().date()
+                op_dt = datetime.combine(dummy_date, loc_op)
+                cl_dt = datetime.combine(dummy_date, loc_cl)
+                total_day_minutes = int((cl_dt - op_dt).total_seconds() / 60)
+                half_duration_minutes = total_day_minutes // 2
+                mid_dt = op_dt + timedelta(minutes=half_duration_minutes)
+                mid_time = mid_dt.time()
+
+                slot1_start = datetime.combine(date_obj, loc_op)
+                slot1_dur = half_duration_minutes
+                if not is_available(room_id, slot1_start, slot1_dur):
+                    occupied_slots.append(loc_op.strftime("%H:%M"))
+
+                slot2_start = datetime.combine(date_obj, mid_time)
+                slot2_dur = total_day_minutes - half_duration_minutes
+                if not is_available(room_id, slot2_start, slot2_dur):
+                    occupied_slots.append(mid_time.strftime("%H:%M"))
+            elif duration <= 720:
+                opening = datetime.combine(date_obj, loc_op)
+                closing = datetime.combine(date_obj, loc_cl)
+                current = opening
+                while current + timedelta(minutes=duration) <= closing:
+                    if not is_available(room_id, current, duration):
+                        occupied_slots.append(current.strftime("%H:%M"))
+                    current += timedelta(minutes=duration)
         elif duration is not None and duration > 720:
             loc_op, loc_cl, _, _ = get_room_schedule(room_id)
             start_dt = datetime.combine(date_obj, loc_op)
@@ -614,7 +667,8 @@ def get_occupied_slots(room_id, booking_type_id=None, date_str=None, start_date_
         week_bookings = Booking.query.filter(
             Booking.room_id == room_id,
             Booking.start_time >= datetime.combine(start_date, time.min),
-            Booking.end_time   <= datetime.combine(end_date,   time.max)
+            Booking.end_time   <= datetime.combine(end_date,   time.max),
+            Booking.status != 'cancelled'  # ✅ Ignorer les réservations annulées
         ).order_by(Booking.start_time).all()
 
         occupied_weeks = []
@@ -636,7 +690,14 @@ def get_occupied_slots(room_id, booking_type_id=None, date_str=None, start_date_
                 while current <= w_end:
                     covered_dates.add(current)
                     loc_op, loc_cl, _, _ = get_room_schedule(room_id)
-                    occupied_slots_dict[current.strftime("%Y-%m-%d")] = [loc_op.strftime('%H:%M')]
+                    # Retourner toutes les heures du jour (heure par heure)
+                    day_hours = []
+                    hour_dt = datetime.combine(current, loc_op)
+                    end_dt  = datetime.combine(current, loc_cl)
+                    while hour_dt < end_dt:
+                        day_hours.append(hour_dt.strftime('%H:%M'))
+                        hour_dt += timedelta(hours=1)
+                    occupied_slots_dict[current.strftime("%Y-%m-%d")] = day_hours
                     current += timedelta(days=1)
 
         return {
@@ -666,19 +727,63 @@ def get_occupied_slots(room_id, booking_type_id=None, date_str=None, start_date_
             all_bookings_day = Booking.query.filter(
                 Booking.room_id == room_id,
                 Booking.start_time < closing,
-                Booking.end_time   > opening
+                Booking.end_time   > opening,
+                Booking.status != 'cancelled'  # ✅ Ignorer les réservations annulées
             ).all()
             if all_bookings_day:
                 day_occupied.append(opening_time.strftime('%H:%M'))
         else:
-            opening = datetime.combine(current_date, opening_time)
-            closing = datetime.combine(current_date, closing_time)
-            current = opening
-            # is_available vérifie tous les bookings existants (tous types confondus)
-            while current + timedelta(minutes=duration) <= closing:
-                if not is_available(room_id, current, duration):
-                    day_occupied.append(current.strftime("%H:%M"))
-                current += timedelta(minutes=duration)
+            if is_half_day:
+                dummy_date = datetime.today().date()
+                op_dt = datetime.combine(dummy_date, opening_time)
+                cl_dt = datetime.combine(dummy_date, closing_time)
+                total_day_minutes = int((cl_dt - op_dt).total_seconds() / 60)
+                half_duration_minutes = total_day_minutes // 2
+                mid_dt = op_dt + timedelta(minutes=half_duration_minutes)
+                mid_time = mid_dt.time()
+
+                # ─── Slot matin ───
+                slot1_start = datetime.combine(current_date, opening_time)
+                slot1_end   = datetime.combine(current_date, mid_time)
+                slot1_dur   = half_duration_minutes
+                if not is_available(room_id, slot1_start, slot1_dur):
+                    # Retourner toutes les heures du slot matin
+                    hour = slot1_start
+                    while hour < slot1_end:
+                        day_occupied.append(hour.strftime("%H:%M"))
+                        hour += timedelta(hours=1)
+
+                # ─── Slot après-midi ───
+                slot2_start = datetime.combine(current_date, mid_time)
+                slot2_end   = datetime.combine(current_date, closing_time)
+                slot2_dur   = total_day_minutes - half_duration_minutes
+                if not is_available(room_id, slot2_start, slot2_dur):
+                    # Retourner toutes les heures du slot après-midi
+                    hour = slot2_start
+                    while hour < slot2_end:
+                        day_occupied.append(hour.strftime("%H:%M"))
+                        hour += timedelta(hours=1)
+            else:
+                opening = datetime.combine(current_date, opening_time)
+                closing = datetime.combine(current_date, closing_time)
+                current = opening
+
+                if duration == 720:
+                    # ─── By Day : vérifier si toute la journée est occupée ───
+                    # Si occupée, retourner TOUTES les heures de la journée
+                    # (ex: 08:00 à 19:00) pour que le front-end marque chaque créneau
+                    if not is_available(room_id, opening, 720):
+                        hour = opening
+                        while hour < closing:
+                            day_occupied.append(hour.strftime("%H:%M"))
+                            hour += timedelta(hours=1)
+                else:
+                    # ─── Horaire : slot par slot ───
+                    # is_available vérifie tous les bookings existants (tous types confondus)
+                    while current + timedelta(minutes=duration) <= closing:
+                        if not is_available(room_id, current, duration):
+                            day_occupied.append(current.strftime("%H:%M"))
+                        current += timedelta(minutes=duration)
 
         if day_occupied:
             occupied_slots_by_date[current_date_str] = day_occupied

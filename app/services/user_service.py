@@ -545,8 +545,11 @@ def firebase_auth_or_create(firebase_token: str, phone_fallback: str = None):
     # 2. Sinon, chercher par email (seulement si l'email n'est pas déjà lié à un autre firebase_uid)
     if not user and email:
         user = get_user_by_email(email)
-        if user and not user.firebase_uid:
-            # Lier le compte local existant à Firebase
+        if user and user.auth_provider == "local":
+            # Bloquer : ce compte utilise l'authentification locale
+            return {"error": "Ce compte utilise l'authentification locale. Veuillez vous connecter avec votre email et mot de passe."}, 403
+        elif user and not user.firebase_uid:
+            # Lier le compte existant à Firebase
             user.firebase_uid = firebase_uid
             user.auth_provider = "firebase"
             if phone and not user.phone:
@@ -555,6 +558,8 @@ def firebase_auth_or_create(firebase_token: str, phone_fallback: str = None):
         elif user and user.firebase_uid and user.firebase_uid != firebase_uid:
             # Conflit : l'email appartient à un autre compte Firebase
             return {"error": "Cet email est déjà associé à un autre compte."}, 409
+        else:
+            user = None  # Reset si le user trouvé est None après vérifications
 
     # 3. Sinon, chercher par téléphone
     if not user and phone:

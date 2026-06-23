@@ -32,6 +32,7 @@ async def db_session_middleware(request: Request, call_next):
     Libère la session DB après chaque requête HTTP.
     Évite l'épuisement du pool de connexions SQLAlchemy.
     """
+    db_session.expire_all()  # ← Vide le cache SQLAlchemy → données fraîches à chaque requête
     try:
         response = await call_next(request)
         return response

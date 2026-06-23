@@ -83,6 +83,22 @@ class BookingType(Base):
     is_active        = Column(Boolean, default=True)          # activer/désactiver
     bookings         = relationship('Booking', backref='booking_type')
 
+    @property
+    def resolved_duration_minutes(self):
+        name_lower = self.name.lower() if self.name else ""
+        if "half-day" in name_lower or "demi" in name_lower:
+            if self.room and self.room.location:
+                loc = self.room.location
+                if loc.opening_time and loc.closing_time:
+                    from datetime import datetime, timedelta
+                    dummy = datetime.today().date()
+                    op_dt = datetime.combine(dummy, loc.opening_time)
+                    cl_dt = datetime.combine(dummy, loc.closing_time)
+                    total_minutes = int((cl_dt - op_dt).total_seconds() / 60)
+                    return total_minutes // 2
+        return self.duration_minutes
+
+
 
 class Booking(Base):
     __tablename__ = 'bookings'
